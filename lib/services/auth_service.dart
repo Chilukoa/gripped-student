@@ -1,5 +1,6 @@
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
+import 'package:amplify_secure_storage/amplify_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../amplifyconfiguration.dart';
 
@@ -14,14 +15,49 @@ class AuthService {
     if (_isInitialized) return;
 
     try {
-      // Add the Auth plugin
-      await Amplify.addPlugin(AmplifyAuthCognito());
+      // Check if Amplify is already configured
+      if (Amplify.isConfigured) {
+        _isInitialized = true;
+        safePrint('Amplify is already configured');
+        return;
+      }
+
+      // Add the Auth plugin with secure storage configuration
+      await Amplify.addPlugin(
+        AmplifyAuthCognito(
+          secureStorageFactory: AmplifySecureStorage.factoryFrom(),
+        ),
+      );
 
       // Configure Amplify with the configuration
       await Amplify.configure(amplifyconfig);
 
       _isInitialized = true;
       safePrint('Amplify configured successfully');
+    } on AmplifyAlreadyConfiguredException {
+      // Amplify was already configured, just mark as initialized
+      _isInitialized = true;
+      safePrint('Amplify was already configured');
+    } on AmplifyException catch (e) {
+      safePrint('AmplifyException during initialization: ${e.message}');
+      safePrint('Recovery suggestion: ${e.recoverySuggestion}');
+
+      // Check for specific secure storage errors
+      if (e.message.contains('SecureStorageInterface') ||
+          e.message.contains('No builder registered')) {
+        safePrint('Secure storage configuration issue detected');
+
+        // Try to clear any corrupted storage and retry with fallback
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.clear();
+          safePrint('Cleared SharedPreferences for fresh start');
+        } catch (clearError) {
+          safePrint('Error clearing SharedPreferences: $clearError');
+        }
+      }
+
+      rethrow;
     } catch (e) {
       safePrint('Error configuring Amplify: $e');
       rethrow;
@@ -30,8 +66,16 @@ class AuthService {
 
   Future<bool> isSignedIn() async {
     try {
+      if (!_isInitialized) {
+        safePrint('Amplify not initialized, cannot check auth status');
+        return false;
+      }
+
       final result = await Amplify.Auth.fetchAuthSession();
       return result.isSignedIn;
+    } on AmplifyException catch (e) {
+      safePrint('AmplifyException checking sign-in status: ${e.message}');
+      return false;
     } catch (e) {
       safePrint('Error checking sign-in status: $e');
       return false;

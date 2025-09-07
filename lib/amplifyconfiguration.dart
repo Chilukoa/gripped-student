@@ -9,13 +9,6 @@ const amplifyconfig = ''' {
                 "IdentityManager": {
                     "Default": {}
                 },
-                "AppSync": {
-                    "Default": {
-                        "ApiUrl": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_aUtqQtNcJ",
-                        "Region": "us-east-1",
-                        "AuthMode": "AMAZON_COGNITO_USER_POOLS"
-                    }
-                },
                 "CognitoUserPool": {
                     "Default": {
                         "PoolId": "us-east-1_aUtqQtNcJ",

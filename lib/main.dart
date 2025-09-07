@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 
@@ -16,6 +17,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool _isAmplifyConfigured = false;
+  String? _error;
 
   @override
   void initState() {
@@ -25,12 +27,26 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _configureAmplify() async {
     try {
-      await AuthService().initialize();
-      setState(() {
-        _isAmplifyConfigured = true;
-      });
+      // Add timeout to prevent infinite loading
+      await AuthService().initialize().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Amplify initialization timed out after 30 seconds');
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _isAmplifyConfigured = true;
+        });
+      }
     } catch (e) {
       safePrint('Failed to configure Amplify: $e');
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
     }
   }
 
@@ -42,7 +58,11 @@ class _MyAppState extends State<MyApp> {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: _isAmplifyConfigured ? const AuthWrapper() : const SplashScreen(),
+      home: _error != null
+          ? ErrorScreen(error: _error!)
+          : _isAmplifyConfigured
+          ? const AuthWrapper()
+          : const SplashScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -67,17 +87,29 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<void> _checkAuthStatus() async {
     try {
-      final isSignedIn = await AuthService().isSignedIn();
-      setState(() {
-        _isSignedIn = isSignedIn;
-        _isLoading = false;
-      });
+      // Add timeout to prevent infinite loading
+      final isSignedIn = await AuthService().isSignedIn().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          safePrint('Auth check timed out after 15 seconds');
+          return false;
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _isSignedIn = isSignedIn;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       safePrint('Error checking auth status: $e');
-      setState(() {
-        _isSignedIn = false;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSignedIn = false;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -93,20 +125,58 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 }
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _controller.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: Colors.deepPurple,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.fitness_center, size: 100, color: Colors.white),
-            SizedBox(height: 24),
-            Text(
+            AnimatedBuilder(
+              animation: _animation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: 0.8 + (_animation.value * 0.2),
+                  child: const Icon(
+                    Icons.fitness_center,
+                    size: 100,
+                    color: Colors.white,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text(
               'Gripped Apps',
               style: TextStyle(
                 fontSize: 32,
@@ -114,11 +184,165 @@ class SplashScreen extends StatelessWidget {
                 color: Colors.white,
               ),
             ),
-            SizedBox(height: 24),
-            CircularProgressIndicator(
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
             ),
+            const SizedBox(height: 16),
+            const Text(
+              'Initializing...',
+              style: TextStyle(fontSize: 16, color: Colors.white70),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ErrorScreen extends StatelessWidget {
+  final String error;
+
+  const ErrorScreen({super.key, required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isSecureStorageError =
+        error.contains('SecureStorageInterface') ||
+        error.contains('builder identifier') ||
+        error.contains('bundle identifier');
+
+    return Scaffold(
+      backgroundColor: Colors.red.shade50,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 80, color: Colors.red.shade400),
+              const SizedBox(height: 24),
+              Text(
+                'Configuration Error',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              if (isSecureStorageError) ...[
+                Text(
+                  'Failed to initialize authentication: ${error.contains('SecureStorageInterface') ? 'Secure storage configuration issue' : 'Bundle identifier changed'}',
+                  style: TextStyle(fontSize: 16, color: Colors.red.shade600),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    border: Border.all(color: Colors.orange.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'This usually happens when:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• Bundle identifier was changed\n• App was reinstalled\n• iOS keychain entries are corrupted',
+                        style: TextStyle(color: Colors.orange.shade700),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      // Clear app data and restart
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.clear();
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'App data cleared. Please restart the app.',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error clearing data: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Clear App Data'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    border: Border.all(color: Colors.red.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    error,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.red.shade700,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Restart the app
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (context) => const MyApp()),
+                  );
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
