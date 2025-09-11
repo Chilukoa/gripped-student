@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_service.dart';
+import 'services/user_service.dart';
 import 'screens/login_screen.dart';
+import 'screens/profile_setup_screen.dart';
+import 'screens/trainer_dashboard_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -78,6 +81,7 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isSignedIn = false;
   bool _isLoading = true;
+  bool _hasProfile = false;
 
   @override
   void initState() {
@@ -89,24 +93,37 @@ class _AuthWrapperState extends State<AuthWrapper> {
     try {
       // Add timeout to prevent infinite loading
       final isSignedIn = await AuthService().isSignedIn().timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          safePrint('Auth check timed out after 15 seconds');
-          return false;
-        },
+        const Duration(seconds: 10),
       );
 
-      if (mounted) {
-        setState(() {
-          _isSignedIn = isSignedIn;
-          _isLoading = false;
-        });
+      if (isSignedIn) {
+        // Check if user profile exists
+        final profile = await UserService().getUserProfile().timeout(
+          const Duration(seconds: 10),
+        );
+        
+        if (mounted) {
+          setState(() {
+            _isSignedIn = true;
+            _hasProfile = profile != null && profile.isProfileComplete;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isSignedIn = false;
+            _hasProfile = false;
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
       safePrint('Error checking auth status: $e');
       if (mounted) {
         setState(() {
           _isSignedIn = false;
+          _hasProfile = false;
           _isLoading = false;
         });
       }
@@ -119,9 +136,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const SplashScreen();
     }
 
-    return _isSignedIn
-        ? const MyHomePage(title: 'Gripped Apps - Home')
-        : const LoginScreen();
+    if (!_isSignedIn) {
+      return const LoginScreen();
+    }
+
+    if (!_hasProfile) {
+      return const ProfileSetupScreen();
+    }
+
+    return const TrainerDashboardScreen();
   }
 }
 

@@ -3,7 +3,6 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import '../services/auth_service.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
-import '../main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -41,11 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (result.isSignedIn) {
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => const MyHomePage(title: 'Gripped Apps'),
-            ),
-          );
+          // Navigate back to main app to re-check auth status and profile
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
         }
       }
     } on AuthException catch (e) {
