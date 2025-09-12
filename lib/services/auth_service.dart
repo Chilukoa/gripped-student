@@ -146,18 +146,26 @@ class AuthService {
     required String password,
   }) async {
     try {
+      safePrint('Attempting sign in for user: $email');
+      safePrint('Amplify configured: ${Amplify.isConfigured}');
+
       final result = await Amplify.Auth.signIn(
         username: email,
         password: password,
       );
 
+      safePrint('Sign in result: ${result.isSignedIn}');
+      safePrint('Next step: ${result.nextStep}');
+
       if (result.isSignedIn) {
         await _saveUserSession();
+        safePrint('User session saved successfully');
       }
 
       return result;
     } catch (e) {
       safePrint('Error signing in: $e');
+      safePrint('Error type: ${e.runtimeType}');
       rethrow;
     }
   }
@@ -225,6 +233,34 @@ class AuthService {
     } catch (e) {
       safePrint('Error checking local login status: $e');
       return false;
+    }
+  }
+
+  /// Force sign out and clear all local session data
+  /// Useful for debugging or when switching between accounts
+  Future<void> forceSignOut() async {
+    try {
+      // Sign out from Amplify
+      await Amplify.Auth.signOut();
+
+      // Clear local session
+      await _clearUserSession();
+
+      // Clear shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      safePrint('Force sign out completed');
+    } catch (e) {
+      safePrint('Error during force sign out: $e');
+      // Even if Amplify sign out fails, clear local data
+      try {
+        await _clearUserSession();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+      } catch (clearError) {
+        safePrint('Error clearing local data: $clearError');
+      }
     }
   }
 }

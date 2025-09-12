@@ -31,7 +31,7 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
       });
 
       final classes = await ClassService().getClassesByTrainer();
-      
+
       if (mounted) {
         setState(() {
           _classes = classes;
@@ -82,10 +82,7 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadClasses,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadClasses),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'signout') {
@@ -110,11 +107,13 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
       body: _buildBody(screenWidth, screenHeight),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const CreateClassScreen(),
-            ),
-          ).then((_) => _loadClasses()); // Refresh classes after creating
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (context) => const CreateClassScreen(),
+                ),
+              )
+              .then((_) => _loadClasses()); // Refresh classes after creating
         },
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
@@ -222,11 +221,13 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
             SizedBox(height: screenHeight * 0.03),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CreateClassScreen(),
-                  ),
-                ).then((_) => _loadClasses());
+                Navigator.of(context)
+                    .push(
+                      MaterialPageRoute(
+                        builder: (context) => const CreateClassScreen(),
+                      ),
+                    )
+                    .then((_) => _loadClasses());
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
@@ -278,7 +279,7 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
             ],
           ),
         ),
-        
+
         // Classes List
         Expanded(
           child: ListView.builder(
@@ -294,10 +295,14 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
     );
   }
 
-  Widget _buildClassCard(TrainingClass trainingClass, double screenWidth, double screenHeight) {
+  Widget _buildClassCard(
+    TrainingClass trainingClass,
+    double screenWidth,
+    double screenHeight,
+  ) {
     final isActive = trainingClass.status == 'active';
     final isPast = trainingClass.endTime.isBefore(DateTime.now());
-    
+
     return Container(
       margin: EdgeInsets.only(bottom: screenHeight * 0.015),
       decoration: BoxDecoration(
@@ -322,7 +327,9 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                 height: screenHeight * 0.15,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -334,12 +341,17 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                 ),
                 child: trainingClass.imageUrl != null
                     ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
                         child: Image.network(
                           trainingClass.imageUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return _buildDefaultClassImage(screenWidth, screenHeight);
+                            return _buildDefaultClassImage(
+                              screenWidth,
+                              screenHeight,
+                            );
                           },
                         ),
                       )
@@ -349,13 +361,16 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                 top: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: isPast 
+                    color: isPast
                         ? Colors.grey
-                        : isActive 
-                            ? Colors.green 
-                            : Colors.orange,
+                        : isActive
+                        ? Colors.green
+                        : Colors.orange,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -370,7 +385,7 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
               ),
             ],
           ),
-          
+
           // Class Details
           Padding(
             padding: EdgeInsets.all(screenWidth * 0.04),
@@ -415,13 +430,17 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                     ),
                   ],
                 ),
-                
+
                 SizedBox(height: screenHeight * 0.015),
-                
+
                 // Time and Duration
                 Row(
                   children: [
-                    Icon(Icons.access_time, size: screenWidth * 0.04, color: Colors.grey[600]),
+                    Icon(
+                      Icons.access_time,
+                      size: screenWidth * 0.04,
+                      color: Colors.grey[600],
+                    ),
                     SizedBox(width: screenWidth * 0.02),
                     Expanded(
                       child: Text(
@@ -434,13 +453,17 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                     ),
                   ],
                 ),
-                
+
                 SizedBox(height: screenHeight * 0.01),
-                
+
                 // Location and Participants
                 Row(
                   children: [
-                    Icon(Icons.location_on, size: screenWidth * 0.04, color: Colors.grey[600]),
+                    Icon(
+                      Icons.location_on,
+                      size: screenWidth * 0.04,
+                      color: Colors.grey[600],
+                    ),
                     SizedBox(width: screenWidth * 0.02),
                     Expanded(
                       child: Text(
@@ -453,12 +476,16 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                     ),
                   ],
                 ),
-                
+
                 SizedBox(height: screenHeight * 0.01),
-                
+
                 Row(
                   children: [
-                    Icon(Icons.people, size: screenWidth * 0.04, color: Colors.grey[600]),
+                    Icon(
+                      Icons.people,
+                      size: screenWidth * 0.04,
+                      color: Colors.grey[600],
+                    ),
                     SizedBox(width: screenWidth * 0.02),
                     Text(
                       '${trainingClass.participants.length}/${trainingClass.maxParticipants} participants',
@@ -469,9 +496,9 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
                     ),
                   ],
                 ),
-                
+
                 SizedBox(height: screenHeight * 0.015),
-                
+
                 // Description
                 Text(
                   trainingClass.description,
@@ -519,7 +546,7 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final classDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
-    
+
     String dateStr;
     if (classDate.isAtSameMomentAs(today)) {
       dateStr = 'Today';
@@ -528,13 +555,13 @@ class _TrainerDashboardScreenState extends State<TrainerDashboardScreen> {
     } else {
       dateStr = '${dateTime.month}/${dateTime.day}';
     }
-    
+
     final hour = dateTime.hour;
     final minute = dateTime.minute;
     final period = hour >= 12 ? 'PM' : 'AM';
     final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
     final displayMinute = minute.toString().padLeft(2, '0');
-    
+
     return '$dateStr at $displayHour:$displayMinute $period';
   }
 }

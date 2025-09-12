@@ -33,6 +33,12 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      // Check if someone is already signed in and sign them out first
+      final isSignedIn = await AuthService().isSignedIn();
+      if (isSignedIn) {
+        await AuthService().signOut();
+      }
+
       final result = await AuthService().signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,

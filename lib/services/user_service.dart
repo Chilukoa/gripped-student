@@ -15,8 +15,10 @@ class UserService {
     try {
       final session = await Amplify.Auth.fetchAuthSession();
       if (session is CognitoAuthSession) {
-        final token = session.userPoolTokensResult.value.accessToken.raw;
-        
+        final token = session.userPoolTokensResult.value.idToken.raw;
+        safePrint('Token length: ${token.length}');
+        safePrint('Token preview: ${token.substring(0, 50)}...');
+
         return {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -26,11 +28,8 @@ class UserService {
     } catch (e) {
       safePrint('Error getting auth headers: $e');
     }
-    
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+
+    return {'Content-Type': 'application/json', 'Accept': 'application/json'};
   }
 
   Future<UserProfile?> getUserProfile() async {
@@ -42,7 +41,9 @@ class UserService {
       );
 
       if (response.statusCode == 200) {
+        safePrint('Raw profile response: ${response.body}');
         final data = json.decode(response.body);
+        safePrint('Parsed profile data: $data');
         return UserProfile.fromJson(data);
       } else if (response.statusCode == 404) {
         // User profile doesn't exist yet
@@ -61,17 +62,27 @@ class UserService {
       final headers = await _getAuthHeaders();
       final body = json.encode(profile.toJson());
 
-      final response = await http.post(
+      safePrint('Updating user profile...');
+      safePrint('Request URL: ${app_config.ApiConfig.updateUserProfile}');
+      safePrint('Request headers: $headers');
+      safePrint('Request body: $body');
+
+      final response = await http.put(
         Uri.parse(app_config.ApiConfig.updateUserProfile),
         headers: headers,
         body: body,
       );
 
+      safePrint('Profile update response: ${response.statusCode}');
       if (response.statusCode == 200 || response.statusCode == 201) {
+        safePrint('Profile update response body: ${response.body}');
         final data = json.decode(response.body);
         return UserProfile.fromJson(data);
       } else {
-        throw Exception('Failed to update user profile: ${response.statusCode}');
+        safePrint('Profile update error response: ${response.body}');
+        throw Exception(
+          'Failed to update user profile: ${response.statusCode}',
+        );
       }
     } catch (e) {
       safePrint('Error updating user profile: $e');
@@ -79,37 +90,118 @@ class UserService {
     }
   }
 
-  Future<String> uploadImage(File imageFile, String imageType) async {
+  Future<List<String>> uploadImages(List<File> imageFiles) async {
     try {
+      // Get presigned URLs for all images
+      final presignedUrls = await _getPresignedUrls(imageFiles.length);
+      if (presignedUrls == null || presignedUrls.length != imageFiles.length) {
+        throw Exception('Failed to get presigned URLs for images');
+      }
+
+      // Upload each image to S3 using presigned URLs
+      final uploadedImageKeys = <String>[];
+      for (int i = 0; i < imageFiles.length; i++) {
+        final imageKey = await _uploadImageToS3(
+          imageFiles[i],
+          presignedUrls[i],
+        );
+        if (imageKey != null) {
+          uploadedImageKeys.add(imageKey);
+        } else {
+          throw Exception('Failed to upload image ${i + 1}');
+        }
+      }
+
+      return uploadedImageKeys;
+    } catch (e) {
+      safePrint('Error uploading images: $e');
+      rethrow;
+    }
+  }
+
+  Future<String?> uploadSingleImage(File imageFile) async {
+    try {
+      final imageKeys = await uploadImages([imageFile]);
+      return imageKeys.isNotEmpty ? imageKeys.first : null;
+    } catch (e) {
+      safePrint('Error uploading single image: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>?> _getPresignedUrls(int imageCount) async {
+    try {
+      safePrint('Getting presigned URLs for $imageCount images...');
       final headers = await _getAuthHeaders();
-      headers.remove('Content-Type'); // Let http package set this for multipart
+      final body = json.encode({
+        'imageCount': imageCount,
+        'contentType': 'image/jpeg',
+      });
 
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(app_config.ApiConfig.uploadImage),
-      );
-      
-      request.headers.addAll(headers);
-      request.fields['imageType'] = imageType; // 'profile' or 'id'
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'image',
-          imageFile.path,
-        ),
+      safePrint('Request URL: ${app_config.ApiConfig.getPresignedUrls}');
+      safePrint('Request headers: $headers');
+      safePrint('Request body: $body');
+
+      final response = await http.post(
+        Uri.parse(app_config.ApiConfig.getPresignedUrls),
+        headers: headers,
+        body: body,
       );
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      safePrint('Presigned URL response: ${response.statusCode}');
+      safePrint('Presigned URL response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['imageUrl']; // Assuming the API returns the image URL
+        final urls = List<Map<String, dynamic>>.from(data['presignedUrls']);
+        safePrint('Got ${urls.length} presigned URLs');
+        return urls;
       } else {
-        throw Exception('Failed to upload image: ${response.statusCode}');
+        throw Exception(
+          'Failed to get presigned URLs: ${response.statusCode} - ${response.body}',
+        );
       }
     } catch (e) {
-      safePrint('Error uploading image: $e');
-      rethrow;
+      safePrint('Error getting presigned URLs: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _uploadImageToS3(
+    File imageFile,
+    Map<String, dynamic> presignedUrl,
+  ) async {
+    try {
+      safePrint('Uploading image to S3...');
+      safePrint('Upload URL: ${presignedUrl['uploadUrl']}');
+      safePrint('Image ID: ${presignedUrl['imageId']}');
+
+      final imageBytes = await imageFile.readAsBytes();
+      safePrint('Image size: ${imageBytes.length} bytes');
+
+      final response = await http.put(
+        Uri.parse(presignedUrl['uploadUrl']),
+        headers: {'Content-Type': 'image/jpeg'},
+        body: imageBytes,
+      );
+
+      safePrint('S3 upload response: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        safePrint('S3 upload response body: ${response.body}');
+      }
+
+      if (response.statusCode == 200) {
+        final imageId = presignedUrl['imageId'];
+        safePrint('Successfully uploaded image with ID: $imageId');
+        return imageId;
+      } else {
+        throw Exception(
+          'Failed to upload to S3: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      safePrint('Error uploading to S3: $e');
+      return null;
     }
   }
 }

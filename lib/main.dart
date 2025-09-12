@@ -96,20 +96,44 @@ class _AuthWrapperState extends State<AuthWrapper> {
         const Duration(seconds: 10),
       );
 
+      safePrint('Auth status check - isSignedIn: $isSignedIn');
+
       if (isSignedIn) {
-        // Check if user profile exists
-        final profile = await UserService().getUserProfile().timeout(
-          const Duration(seconds: 10),
-        );
-        
-        if (mounted) {
-          setState(() {
-            _isSignedIn = true;
-            _hasProfile = profile != null && profile.isProfileComplete;
-            _isLoading = false;
-          });
+        safePrint('User is signed in, checking profile...');
+        // Check if user has completed profile setup
+        try {
+          final userService = UserService();
+          final profile = await userService.getUserProfile();
+          safePrint('Retrieved profile: ${profile?.toJson()}');
+          final hasCompleteProfile =
+              profile != null && profile.isProfileComplete;
+
+          safePrint('Profile check - profile exists: ${profile != null}');
+          safePrint(
+            'Profile check - isComplete: ${profile?.isProfileComplete}',
+          );
+          safePrint('Profile check - hasProfile: $hasCompleteProfile');
+
+          if (mounted) {
+            setState(() {
+              _isSignedIn = true;
+              _hasProfile = hasCompleteProfile;
+              _isLoading = false;
+            });
+          }
+        } catch (e) {
+          safePrint('Error checking profile: $e');
+          // If profile check fails, assume no profile and go to setup
+          if (mounted) {
+            setState(() {
+              _isSignedIn = true;
+              _hasProfile = false;
+              _isLoading = false;
+            });
+          }
         }
       } else {
+        safePrint('User is not signed in');
         if (mounted) {
           setState(() {
             _isSignedIn = false;

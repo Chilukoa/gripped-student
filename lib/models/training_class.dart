@@ -63,11 +63,11 @@ class TrainingClass {
       trainerId: json['trainerId'] ?? '',
       status: json['status'] ?? 'active',
       participants: List<String>.from(json['participants'] ?? []),
-      createdAt: json['createdAt'] != null 
-          ? DateTime.parse(json['createdAt']) 
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
           : null,
-      updatedAt: json['updatedAt'] != null 
-          ? DateTime.parse(json['updatedAt']) 
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
           : null,
     );
   }

@@ -1,12 +1,18 @@
+import 'package:amplify_flutter/amplify_flutter.dart';
+import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
+
 class ApiConfig {
   // Base URLs for different environments
-  static const String _prodBaseUrl = 'https://api.grippedapp.com';
-  static const String _testBaseUrl = 'https://test-api.grippedapp.com';
+  static const String _prodBaseUrl =
+      'https://xsmi514ucd.execute-api.us-east-1.amazonaws.com/prod';
+  static const String _testBaseUrl =
+      'https://5957u6zvu3.execute-api.us-east-1.amazonaws.com/prod';
   static const String _devBaseUrl = 'https://dev-api.grippedapp.com';
-  
+
   // Environment flag - change this for different builds
-  static const Environment _environment = Environment.test; // Change to prod for production
-  
+  static const Environment _environment =
+      Environment.production; // Change to prod for production
+
   static String get baseUrl {
     switch (_environment) {
       case Environment.production:
@@ -17,31 +23,41 @@ class ApiConfig {
         return _devBaseUrl;
     }
   }
-  
+
   // User endpoints
-  static String get getUserProfile => '$baseUrl/user/profile';
-  static String get updateUserProfile => '$baseUrl/user/profile';
-  static String get uploadImage => '$baseUrl/user/upload-image';
-  
+  static String get getUserProfile => '$baseUrl/profile/me';
+  static String get updateUserProfile => '$baseUrl/profile/me';
+  static String get getPresignedUrls => '$baseUrl/profile/presigned-url';
+  static String get deleteUserProfile => '$baseUrl/profile/me';
+
   // Class endpoints
-  static String get getClassesByTrainer => '$baseUrl/classes/trainer';
+  static String get getClassesByTrainer => '$baseUrl/trainers/me/classes';
   static String get createClass => '$baseUrl/classes';
   static String get updateClass => '$baseUrl/classes';
   static String get deleteClass => '$baseUrl/classes';
-  
+  static String get enrollInClass =>
+      '$baseUrl/classes'; // + /{sessionId}/enroll
+  static String get getStudentClasses => '$baseUrl/students/me/classes';
+  static String get sendClassMessage =>
+      '$baseUrl/classes'; // + /{sessionId}/messages
+
   // Authentication headers
   static Future<Map<String, String>> getAuthHeaders() async {
-    // This will be implemented to get the JWT token from Cognito
-    // For now, returning basic headers
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+    try {
+      final session = await Amplify.Auth.fetchAuthSession();
+      final cognitoSession = session as CognitoAuthSession;
+      final idToken = cognitoSession.userPoolTokensResult.value.idToken.raw;
+
+      return {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      };
+    } catch (e) {
+      print('Error getting auth headers: $e');
+      return {'Content-Type': 'application/json', 'Accept': 'application/json'};
+    }
   }
 }
 
-enum Environment {
-  production,
-  test,
-  development,
-}
+enum Environment { production, test, development }

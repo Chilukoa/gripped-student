@@ -57,14 +57,22 @@ class UserProfile {
       state: json['state'] ?? '',
       zip: json['zip'] ?? '',
       gender: json['gender'] ?? '',
-      profileImage: json['profileImage'],
-      idImage: json['idImage'],
+      // Handle both formats: direct profileImage or images array
+      profileImage:
+          json['profileImage'] ??
+          (json['images'] != null && (json['images'] as List).isNotEmpty
+              ? (json['images'] as List).first['imageId']
+              : null),
+      // Backend stores idImageKey as a string, but might also have idImage as a Map
+      idImage:
+          json['idImageKey'] ??
+          (json['idImage'] is Map ? json['idImage']['key'] : json['idImage']),
       certifications: List<String>.from(json['certifications'] ?? []),
-      createdAt: json['createdAt'] != null 
-          ? DateTime.parse(json['createdAt']) 
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
           : null,
-      updatedAt: json['updatedAt'] != null 
-          ? DateTime.parse(json['updatedAt']) 
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
           : null,
     );
   }
@@ -85,8 +93,16 @@ class UserProfile {
       'state': state,
       'zip': zip,
       'gender': gender,
-      if (profileImage != null) 'profileImage': profileImage,
-      if (idImage != null) 'idImage': idImage,
+      // Format images as expected by API
+      if (profileImage != null)
+        'images': [
+          {
+            'imageId': profileImage,
+            'key': profileImage, // Using imageId as key for now
+          },
+        ],
+      // Backend expects idImage as a Map with 'key' field
+      if (idImage != null) 'idImage': {'imageId': idImage, 'key': idImage},
       'certifications': certifications,
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),

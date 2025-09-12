@@ -15,7 +15,7 @@ class ClassService {
       final session = await Amplify.Auth.fetchAuthSession();
       if (session is CognitoAuthSession) {
         final token = session.userPoolTokensResult.value.accessToken.raw;
-        
+
         return {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -25,11 +25,8 @@ class ClassService {
     } catch (e) {
       safePrint('Error getting auth headers: $e');
     }
-    
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+
+    return {'Content-Type': 'application/json', 'Accept': 'application/json'};
   }
 
   Future<List<TrainingClass>> getClassesByTrainer() async {

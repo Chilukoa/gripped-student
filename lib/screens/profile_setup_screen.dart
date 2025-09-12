@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/user_profile.dart';
 import '../services/user_service.dart';
+import '../services/auth_service.dart';
+import '../screens/trainer_dashboard_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -32,15 +34,27 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   // Dropdown values
   String _selectedGender = 'Male';
   List<String> _certifications = [];
-  
+
   // Images
   File? _profileImage;
   File? _idImage;
 
   final ImagePicker _picker = ImagePicker();
-  final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
+  final List<String> _genderOptions = [
+    'Male',
+    'Female',
+    'Other',
+    'Prefer not to say',
+  ];
   final List<String> _availableCertifications = [
-    'NASM', 'ACSM', 'ACE', 'NSCA', 'CPR', 'First Aid', 'ISSA', 'NCCPT'
+    'NASM',
+    'ACSM',
+    'ACE',
+    'NSCA',
+    'CPR',
+    'First Aid',
+    'ISSA',
+    'NCCPT',
   ];
 
   @override
@@ -83,7 +97,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         maxHeight: 1024,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         setState(() {
           if (type == 'profile') {
@@ -146,8 +160,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     try {
       // Upload images first
-      final profileImageUrl = await UserService().uploadImage(_profileImage!, 'profile');
-      final idImageUrl = await UserService().uploadImage(_idImage!, 'id');
+      final profileImageKey = await UserService().uploadSingleImage(
+        _profileImage!,
+      );
+      final idImageKey = await UserService().uploadSingleImage(_idImage!);
+
+      if (profileImageKey == null || idImageKey == null) {
+        throw Exception('Failed to upload images');
+      }
 
       // Create profile
       final profile = UserProfile(
@@ -159,13 +179,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         phone: _phoneController.text.trim(),
         specialty: _specialtyController.text.trim(),
         address1: _address1Controller.text.trim(),
-        address2: _address2Controller.text.trim().isEmpty ? null : _address2Controller.text.trim(),
+        address2: _address2Controller.text.trim().isEmpty
+            ? null
+            : _address2Controller.text.trim(),
         city: _cityController.text.trim(),
         state: _stateController.text.trim(),
         zip: _zipController.text.trim(),
         gender: _selectedGender,
-        profileImage: profileImageUrl,
-        idImage: idImageUrl,
+        profileImage: profileImageKey,
+        idImage: idImageKey,
         certifications: _certifications,
       );
 
@@ -179,7 +201,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           ),
         );
 
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        // Navigate to trainer dashboard
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const TrainerDashboardScreen(),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -199,6 +226,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
   }
 
+  Future<void> _signOut() async {
+    try {
+      await AuthService().signOut();
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error signing out: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -211,6 +256,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'signout') {
+                _signOut();
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'signout',
+                child: ListTile(
+                  leading: Icon(Icons.logout, color: Colors.red),
+                  title: Text('Sign Out'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -476,7 +539,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                           width: screenHeight * 0.03,
                           child: const CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : Text(
@@ -497,7 +562,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
-  Widget _buildSection(String title, List<Widget> children, double screenWidth, double screenHeight) {
+  Widget _buildSection(
+    String title,
+    List<Widget> children,
+    double screenWidth,
+    double screenHeight,
+  ) {
     return Container(
       margin: EdgeInsets.only(bottom: screenHeight * 0.03),
       padding: EdgeInsets.all(screenWidth * 0.04),
@@ -525,10 +595,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             ),
           ),
           SizedBox(height: screenHeight * 0.02),
-          ...children.map((child) => Padding(
-            padding: EdgeInsets.only(bottom: screenHeight * 0.02),
-            child: child,
-          )),
+          ...children.map(
+            (child) => Padding(
+              padding: EdgeInsets.only(bottom: screenHeight * 0.02),
+              child: child,
+            ),
+          ),
         ],
       ),
     );
@@ -548,9 +620,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
@@ -569,19 +639,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       value: value,
       decoration: InputDecoration(
         labelText: label,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
         ),
       ),
       items: items.map((item) {
-        return DropdownMenuItem<String>(
-          value: item,
-          child: Text(item),
-        );
+        return DropdownMenuItem<String>(value: item, child: Text(item));
       }).toList(),
       onChanged: onChanged,
     );
@@ -622,7 +687,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
-  Widget _buildImagePicker(String label, File? image, VoidCallback onTap, double screenWidth) {
+  Widget _buildImagePicker(
+    String label,
+    File? image,
+    VoidCallback onTap,
+    double screenWidth,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -648,10 +718,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             child: image != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      image,
-                      fit: BoxFit.cover,
-                    ),
+                    child: Image.file(image, fit: BoxFit.cover),
                   )
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
