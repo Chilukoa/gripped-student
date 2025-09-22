@@ -171,7 +171,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
       // Create profile
       final profile = UserProfile(
-        role: 'trainer',
+        role: 'subscriber',
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         displayName: _displayNameController.text.trim(),
