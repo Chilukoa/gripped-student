@@ -1,9 +1,11 @@
 # Gripped Apps - AI Coding Agent Instructions
 
+## IMPORTANT:
+These instructions are for GitHub Copilot to help generate code for the Gripped Apps Flutter project. These are copied over from cd ~/grippedapps. The grippedapps and gripped_student projects are identical except for bundle IDs and API endpoints. Do not copy changes between trainer and student projects for classes.
+
+
 ## Project Overview
 Flutter fitness app with AWS Cognito authentication, REST API backend, and multi-environment support. Supports both trainer and student workflows with shared auth/profile setup across 4 project variants: trainer prod/beta and student alpha/beta.
-
-## IMPORTANT: Do not copy changes between trainer and student projects for classes. Student projects are complete copies of trainer codebases with identical auth/profile flows. Future differentiation will be in dashboard screens and user role logic. THIS FILE IS COPY PASTE FROM TRAINER VERSION. 
 
 ## Architecture & Key Components
 

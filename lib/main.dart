@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/auth_service.dart';
-import 'services/user_service.dart';
-import 'screens/login_screen.dart';
-import 'screens/profile_setup_screen.dart';
-import 'screens/trainer_dashboard_screen.dart';
+import '../screens/login_screen.dart';
+import '../screens/profile_setup_screen.dart';
+import '../screens/trainer_dashboard_screen.dart';
+import '../screens/student_dashboard_screen.dart';
+import '../services/auth_service.dart';
+import '../services/user_service.dart';
+import '../models/user_profile.dart' as models;
 
 void main() {
   runApp(const MyApp());
@@ -56,7 +58,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gripped Apps',
+      title: 'Gripped Student',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -82,6 +84,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   bool _isSignedIn = false;
   bool _isLoading = true;
   bool _hasProfile = false;
+  models.UserProfile? _userProfile;
 
   @override
   void initState() {
@@ -118,6 +121,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
             setState(() {
               _isSignedIn = true;
               _hasProfile = hasCompleteProfile;
+              _userProfile = profile;
               _isLoading = false;
             });
           }
@@ -168,7 +172,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const ProfileSetupScreen();
     }
 
-    return const TrainerDashboardScreen();
+    // Navigate to appropriate dashboard based on user role
+    safePrint('User profile: ${_userProfile?.toJson()}');
+    safePrint('User role: ${_userProfile?.role}');
+    safePrint('Role toLowerCase: ${_userProfile?.role.toLowerCase()}');
+
+    if (_userProfile?.role.toLowerCase() == 'subscriber') {
+      safePrint('Navigating to StudentDashboardScreen');
+      return const StudentDashboardScreen();
+    } else {
+      safePrint('Navigating to TrainerDashboardScreen (default)');
+      return const TrainerDashboardScreen();
+    }
   }
 }
 
