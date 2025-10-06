@@ -74,6 +74,11 @@ def test_search_api(token, test_name, query_params):
                 distance = class_result.get('distanceMiles', 'N/A')
                 class_title = class_result.get('classTitle', 'N/A')
                 trainer_name = class_result.get('trainerName', 'N/A')
+                trainer_email = class_result.get('trainerEmail', 'N/A')
+                trainer_phone = class_result.get('trainerPhone', 'N/A')
+                trainer_bio = class_result.get('trainerBio', 'N/A')
+                trainer_specialty = class_result.get('trainerSpecialty', 'N/A')
+                trainer_certifications = class_result.get('trainerCertifications', [])
                 tags = class_result.get('tags', [])
                 address = class_result.get('address', 'N/A')
                 city = class_result.get('city', 'N/A')
@@ -82,11 +87,24 @@ def test_search_api(token, test_name, query_params):
                 price = class_result.get('price', 'N/A')
                 start_time = class_result.get('startDateTime', 'N/A')
                 end_time = class_result.get('endDateTime', 'N/A')
+                max_students = class_result.get('maxStudents', 'N/A')
+                current_students = class_result.get('currentStudents', 'N/A')
                 print(f"  {i+1}. {class_title} - {distance} miles")
                 print(f"     Trainer: {trainer_name}")
+                if trainer_email != 'N/A' and trainer_email:
+                    print(f"     Email: {trainer_email}")
+                if trainer_phone != 'N/A' and trainer_phone:
+                    print(f"     Phone: {trainer_phone}")
+                if trainer_bio != 'N/A' and trainer_bio:
+                    print(f"     Bio: {trainer_bio}")
+                if trainer_specialty != 'N/A' and trainer_specialty:
+                    print(f"     Specialty: {trainer_specialty}")
+                if trainer_certifications:
+                    print(f"     Certifications: {trainer_certifications}")
                 print(f"     Tags: {tags}")
                 print(f"     Location: {address}, {city}, {state} {zip_code}")
                 print(f"     Price: ${price}")
+                print(f"     Capacity: {current_students}/{max_students} students")
                 print(f"     Schedule: {start_time} to {end_time}")
                 print()
         else:

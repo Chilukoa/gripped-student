@@ -47,6 +47,9 @@ dependencies:
   
   # For image selection
   image_picker: ^1.0.4
+  
+  # For launching URLs (phone, email, etc.)
+  url_launcher: ^6.2.1
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
-import '../models/training_class.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../services/student_service.dart';
@@ -17,13 +17,15 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final StudentService _studentService = StudentService();
   
   // Search tab state
   final _zipCodeController = TextEditingController();
   final _queryController = TextEditingController();
-  List<TrainingClass> _searchResults = [];
+  List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
   String? _searchError;
+  DateTime? _selectedDate;
   
   // Enrolled classes tab state
   List<dynamic> _enrolledClasses = [];
@@ -52,7 +54,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     });
 
     try {
-      final enrolledData = await StudentService().getEnrolledClasses();
+      final enrolledData = await _studentService.getEnrolledClasses();
       if (mounted) {
         setState(() {
           _enrolledClasses = enrolledData['classes'] ?? [];
@@ -81,18 +83,37 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       return;
     }
 
+    if (_queryController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a class type'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isSearching = true;
       _searchError = null;
     });
 
     try {
-      final results = await StudentService().searchClasses(
+      final results = await _studentService.searchClasses(
         zipCode: _zipCodeController.text.trim(),
-        query: _queryController.text.trim().isNotEmpty 
-            ? _queryController.text.trim() 
-            : null,
+        query: _queryController.text.trim(),
         radiusMiles: "30", // Default 30 miles radius
+        date: "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}",
       );
       
       if (mounted) {
@@ -114,7 +135,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
 
   Future<void> _enrollInClass(String sessionId) async {
     try {
-      await StudentService().enrollInClass(sessionId);
+      await _studentService.enrollInClass(sessionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -330,6 +351,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                       color: Colors.deepPurple,
                     ),
                   ),
+                  SizedBox(height: screenHeight * 0.005),
+                  Text(
+                    'All fields marked with * are required',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.032,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                   SizedBox(height: screenHeight * 0.02),
                   
                   // Zip Code Field
@@ -349,10 +379,61 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   TextFormField(
                     controller: _queryController,
                     decoration: const InputDecoration(
-                      labelText: 'Class Type (Optional)',
+                      labelText: 'Class Type *',
                       hintText: 'e.g., yoga, strength, pilates',
                       prefixIcon: Icon(Icons.fitness_center),
                       border: OutlineInputBorder(),
+                    ),
+                  ),
+                  SizedBox(height: screenHeight * 0.02),
+                  
+                  // Date Field
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate ?? DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _selectedDate = picked;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today, color: Colors.grey),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedDate != null 
+                                  ? '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'
+                                  : 'Select Date *',
+                              style: TextStyle(
+                                color: _selectedDate != null ? Colors.black87 : Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          if (_selectedDate != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 20),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedDate = null;
+                                });
+                              },
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   SizedBox(height: screenHeight * 0.03),
@@ -442,8 +523,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _searchResults.length,
                   itemBuilder: (context, index) {
-                    final trainingClass = _searchResults[index];
-                    return _buildSearchResultCard(trainingClass, screenWidth, screenHeight);
+                    final classResult = _searchResults[index];
+                    return _buildSearchResultCard(classResult, screenWidth, screenHeight);
                   },
                 ),
               ],
@@ -483,15 +564,32 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     );
   }
 
-  Widget _buildSearchResultCard(TrainingClass trainingClass, double screenWidth, double screenHeight) {
+  Widget _buildSearchResultCard(Map<String, dynamic> classResult, double screenWidth, double screenHeight) {
+    final classTitle = classResult['classTitle'] as String? ?? 'Unknown Class';
+    final trainerName = classResult['trainerName'] as String? ?? 'Unknown Trainer';
+    final address = classResult['address'] as String? ?? '';
+    final city = classResult['city'] as String? ?? '';
+    final state = classResult['state'] as String? ?? '';
+    final zipCode = classResult['zip'] as String? ?? '';
+    final price = classResult['price'] as num? ?? 0;
+    final distanceMiles = classResult['distanceMiles'] as num? ?? 0;
+    final startDateTime = classResult['startDateTime'] as String?;
+    final endDateTime = classResult['endDateTime'] as String?;
+    final sessionId = classResult['sessionId'] as String?;
+    final currentStudents = classResult['currentStudents'] as int? ?? 0;
+    final maxStudents = classResult['maxStudents'] as int? ?? 0;
+    final isClassFull = currentStudents >= maxStudents;
+
     return Card(
       margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: EdgeInsets.all(screenWidth * 0.04),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Class Name and Price
+            // Header Row - Class Title and Price/Distance
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -500,34 +598,44 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        trainingClass.name,
+                        classTitle,
                         style: TextStyle(
                           fontSize: screenWidth * 0.045,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
+                          color: Colors.deepPurple,
                         ),
                       ),
-                      if (trainingClass.category.isNotEmpty) ...[
-                        SizedBox(height: screenHeight * 0.005),
-                        Text(
-                          trainingClass.category,
-                          style: TextStyle(
-                            fontSize: screenWidth * 0.035,
-                            color: Colors.deepPurple,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      SizedBox(height: screenHeight * 0.005),
+                      Text(
+                        'with $trainerName',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.04,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
-                Text(
-                  '\$${trainingClass.price.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.05,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '\$${price.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.05,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                    Text(
+                      '${distanceMiles.toStringAsFixed(1)} mi',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.03,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -535,102 +643,159 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             SizedBox(height: screenHeight * 0.015),
             
             // Time and Location
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time,
-                  size: screenWidth * 0.04,
-                  color: Colors.grey[600],
-                ),
-                SizedBox(width: screenWidth * 0.02),
-                Expanded(
-                  child: Text(
-                    _formatDateTime(trainingClass.startTime),
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.035,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            SizedBox(height: screenHeight * 0.01),
-            
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on,
-                  size: screenWidth * 0.04,
-                  color: Colors.grey[600],
-                ),
-                SizedBox(width: screenWidth * 0.02),
-                Expanded(
-                  child: Text(
-                    trainingClass.location,
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.035,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            SizedBox(height: screenHeight * 0.01),
-            
-            Row(
-              children: [
-                Icon(
-                  Icons.people,
-                  size: screenWidth * 0.04,
-                  color: Colors.grey[600],
-                ),
-                SizedBox(width: screenWidth * 0.02),
-                Text(
-                  '${trainingClass.participants.length}/${trainingClass.maxParticipants} enrolled',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.035,
+            if (startDateTime != null) ...[
+              Row(
+                children: [
+                  Icon(
+                    Icons.access_time,
+                    size: screenWidth * 0.04,
                     color: Colors.grey[600],
                   ),
-                ),
-              ],
-            ),
-            
-            if (trainingClass.description.isNotEmpty) ...[
-              SizedBox(height: screenHeight * 0.015),
-              Text(
-                trainingClass.description,
-                style: TextStyle(
-                  fontSize: screenWidth * 0.035,
-                  color: Colors.grey[700],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      _formatApiDateTime(startDateTime, endDateTime),
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              SizedBox(height: screenHeight * 0.01),
             ],
             
-            SizedBox(height: screenHeight * 0.015),
-            
-            // Enroll Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: trainingClass.participants.length >= trainingClass.maxParticipants
-                    ? null
-                    : () => _enrollInClass(trainingClass.id ?? ''),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: trainingClass.participants.length >= trainingClass.maxParticipants
-                      ? Colors.grey
-                      : Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                ),
-                child: Text(
-                  trainingClass.participants.length >= trainingClass.maxParticipants
-                      ? 'Class Full'
-                      : 'Enroll in Class',
-                ),
+            // Location
+            if (address.isNotEmpty || city.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    size: screenWidth * 0.04,
+                    color: Colors.grey[600],
+                  ),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      [address, city, state, zipCode]
+                          .where((s) => s.isNotEmpty)
+                          .join(', '),
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              SizedBox(height: screenHeight * 0.01),
+            ],
+            
+            // Capacity
+            if (maxStudents > 0) ...[
+              Row(
+                children: [
+                  Icon(
+                    Icons.people,
+                    size: screenWidth * 0.04,
+                    color: isClassFull ? Colors.red : Colors.grey[600],
+                  ),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    '$currentStudents/$maxStudents students',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.035,
+                      color: isClassFull ? Colors.red : Colors.grey[600],
+                      fontWeight: isClassFull ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  if (isClassFull) ...[
+                    SizedBox(width: screenWidth * 0.02),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'FULL',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.025,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.01),
+            ],
+            
+            SizedBox(height: screenHeight * 0.01),
+            
+            // Three Action Buttons Row
+            Row(
+              children: [
+                // View Details button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showClassDetails(classResult),
+                    icon: Icon(Icons.info_outline, size: screenWidth * 0.04),
+                    label: Text(
+                      'Details',
+                      style: TextStyle(fontSize: screenWidth * 0.032),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.deepPurple,
+                      side: const BorderSide(color: Colors.deepPurple),
+                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
+                    ),
+                  ),
+                ),
+                SizedBox(width: screenWidth * 0.02),
+                
+                // Book Class button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isClassFull || sessionId == null 
+                        ? null 
+                        : () => _showBookingConfirmation(classResult),
+                    icon: Icon(
+                      isClassFull ? Icons.block : Icons.add_circle_outline, 
+                      size: screenWidth * 0.04,
+                    ),
+                    label: Text(
+                      isClassFull ? 'Full' : 'Book',
+                      style: TextStyle(fontSize: screenWidth * 0.032),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isClassFull ? Colors.grey : Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
+                    ),
+                  ),
+                ),
+                SizedBox(width: screenWidth * 0.02),
+                
+                // Contact button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showContactOptions(classResult),
+                    icon: Icon(Icons.contact_phone, size: screenWidth * 0.04),
+                    label: Text(
+                      'Contact',
+                      style: TextStyle(fontSize: screenWidth * 0.032),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.deepPurple,
+                      side: const BorderSide(color: Colors.deepPurple),
+                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1009,5 +1174,260 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final displayMinute = minute.toString().padLeft(2, '0');
 
     return '$dateStr at $displayHour:$displayMinute $period';
+  }
+
+  String _formatApiDateTime(String? startDateTime, String? endDateTime) {
+    if (startDateTime == null) return 'Time TBD';
+    
+    try {
+      final startTime = DateTime.parse(startDateTime);
+      final endTime = endDateTime != null ? DateTime.parse(endDateTime) : null;
+      
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final classDate = DateTime(startTime.year, startTime.month, startTime.day);
+
+      String dateStr;
+      if (classDate.isAtSameMomentAs(today)) {
+        dateStr = 'Today';
+      } else if (classDate.isAtSameMomentAs(today.add(const Duration(days: 1)))) {
+        dateStr = 'Tomorrow';
+      } else {
+        dateStr = '${startTime.month}/${startTime.day}/${startTime.year}';
+      }
+
+      final startHour = startTime.hour;
+      final startMinute = startTime.minute;
+      final startPeriod = startHour >= 12 ? 'PM' : 'AM';
+      final displayStartHour = startHour > 12 ? startHour - 12 : (startHour == 0 ? 12 : startHour);
+      final displayStartMinute = startMinute.toString().padLeft(2, '0');
+
+      String timeStr = '$displayStartHour:$displayStartMinute $startPeriod';
+      
+      if (endTime != null) {
+        final endHour = endTime.hour;
+        final endMinute = endTime.minute;
+        final endPeriod = endHour >= 12 ? 'PM' : 'AM';
+        final displayEndHour = endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
+        final displayEndMinute = endMinute.toString().padLeft(2, '0');
+        timeStr += ' - $displayEndHour:$displayEndMinute $endPeriod';
+      }
+
+      return '$dateStr at $timeStr';
+    } catch (e) {
+      return startDateTime; // Return raw string if parsing fails
+    }
+  }
+
+  void _showClassDetails(Map<String, dynamic> classResult) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(classResult['classTitle'] ?? 'Class Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (classResult['trainerName'] != null) ...[
+                Text('Trainer: ${classResult['trainerName']}', 
+                     style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+              ],
+              if (classResult['description'] != null) ...[
+                Text('Description: ${classResult['description']}'),
+                const SizedBox(height: 8),
+              ],
+              if (classResult['startDateTime'] != null) ...[
+                Text('Time: ${_formatApiDateTime(classResult['startDateTime'], classResult['endDateTime'])}'),
+                const SizedBox(height: 8),
+              ],
+              if (classResult['address'] != null) ...[
+                Text('Location: ${classResult['address']}'),
+                const SizedBox(height: 8),
+              ],
+              if (classResult['price'] != null) ...[
+                Text('Price: \$${classResult['price']}'),
+                const SizedBox(height: 8),
+              ],
+              if (classResult['maxStudents'] != null) ...[
+                Text('Capacity: ${classResult['currentStudents'] ?? 0}/${classResult['maxStudents']} enrolled'),
+                const SizedBox(height: 8),
+              ],
+              if (classResult['distanceMiles'] != null) ...[
+                Text('Distance: ${classResult['distanceMiles']} miles away'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBookingConfirmation(Map<String, dynamic> classResult) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Booking Confirmation'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Class: ${classResult['classTitle'] ?? 'Unknown Class'}'),
+            const SizedBox(height: 8),
+            Text('Trainer: ${classResult['trainerName'] ?? 'Unknown Trainer'}'),
+            const SizedBox(height: 8),
+            if (classResult['startDateTime'] != null)
+              Text('Time: ${_formatApiDateTime(classResult['startDateTime'], classResult['endDateTime'])}'),
+            const SizedBox(height: 8),
+            Text('Price: \$${classResult['price'] ?? 0}'),
+            const SizedBox(height: 16),
+            const Text('Would you like to book this class?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              if (classResult['sessionId'] != null) {
+                _enrollInClass(classResult['sessionId']);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm Booking'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContactOptions(Map<String, dynamic> classResult) {
+    final trainerEmail = classResult['trainerEmail'] as String?;
+    final trainerPhone = classResult['trainerPhone'] as String?;
+    final trainerName = classResult['trainerName'] ?? 'Trainer';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Contact $trainerName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (trainerPhone != null && trainerPhone.isNotEmpty) ...[
+              ListTile(
+                leading: const Icon(Icons.phone, color: Colors.green),
+                title: Text(trainerPhone),
+                subtitle: const Text('Phone'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _makePhoneCall(trainerPhone);
+                },
+              ),
+            ],
+            if (trainerEmail != null && trainerEmail.isNotEmpty) ...[
+              ListTile(
+                leading: const Icon(Icons.email, color: Colors.blue),
+                title: Text(trainerEmail),
+                subtitle: const Text('Email'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _sendEmail(trainerEmail);
+                },
+              ),
+            ],
+            if ((trainerPhone == null || trainerPhone.isEmpty) && 
+                (trainerEmail == null || trainerEmail.isEmpty)) ...[
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'No contact information available for this trainer.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not launch phone call to $phoneNumber'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error launching phone call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendEmail(String email) async {
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: {
+        'subject': 'Inquiry about your fitness class',
+        'body': 'Hi! I found your class on the Gripped app and would like to know more.',
+      },
+    );
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not launch email to $email'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error launching email: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

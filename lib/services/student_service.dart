@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import '../config/api_config.dart' as config;
-import '../models/training_class.dart';
 
 class StudentService {
   static final StudentService _instance = StudentService._internal();
@@ -32,11 +31,12 @@ class StudentService {
   }
 
   /// Search for classes using geospatial search
-  /// Based on the test-geospatial-search.py implementation
-  Future<List<TrainingClass>> searchClasses({
+  /// Based on the updated test-geospatial-search.py implementation
+  Future<List<Map<String, dynamic>>> searchClasses({
     required String zipCode,
     String? query,
     String radiusMiles = "30",
+    String? date,
   }) async {
     try {
       final token = await _getAuthToken();
@@ -49,6 +49,10 @@ class StudentService {
       
       if (query != null && query.isNotEmpty) {
         queryParams['query'] = query;
+      }
+      
+      if (date != null && date.isNotEmpty) {
+        queryParams['date'] = date;
       }
       
       final uri = Uri.parse('$_baseUrl/classes/search').replace(
@@ -67,11 +71,16 @@ class StudentService {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body) as Map<String, dynamic>;
-        final classes = responseData['classes'] as List<dynamic>? ?? [];
+        final results = responseData['results'] as List<dynamic>? ?? [];
+        final totalFound = responseData['totalFound'] as int? ?? 0;
+        final searchLocation = responseData['searchLocation'] as Map<String, dynamic>? ?? {};
+        final radiusValue = responseData['radiusMiles'];
+        final radius = radiusValue is int ? radiusValue.toDouble() : (radiusValue as double? ?? 0.0);
         
-        return classes
-            .map((classData) => TrainingClass.fromJson(classData as Map<String, dynamic>))
-            .toList();
+        safePrint('StudentService: Found $totalFound classes within $radius miles');
+        safePrint('StudentService: Search location: ${searchLocation['latitude']}, ${searchLocation['longitude']}');
+        
+        return results.cast<Map<String, dynamic>>();
       } else {
         throw Exception('Failed to search classes: ${response.statusCode} - ${response.body}');
       }
