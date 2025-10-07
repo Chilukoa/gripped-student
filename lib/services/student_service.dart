@@ -119,6 +119,9 @@ class StudentService {
     try {
       final token = await _getAuthToken();
       
+      safePrint('StudentService: Enrolling in session: $sessionId');
+      safePrint('StudentService: Enroll URL: $_baseUrl/classes/$sessionId/enroll');
+      
       final response = await http.post(
         Uri.parse('$_baseUrl/classes/$sessionId/enroll'),
         headers: _getAuthHeaders(token),

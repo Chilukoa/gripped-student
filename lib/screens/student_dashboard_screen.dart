@@ -135,6 +135,31 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
 
   Future<void> _enrollInClass(String sessionId) async {
     try {
+      safePrint('StudentDashboard: Attempting to enroll in session: $sessionId');
+      
+      // Check if already enrolled in this specific session
+      final isAlreadyEnrolled = _enrolledClasses.any((enrolledClass) {
+        final classInfo = enrolledClass['class'] as Map<String, dynamic>;
+        final enrollmentInfo = enrolledClass['enrollment'] as Map<String, dynamic>;
+        final enrolledSessionId = classInfo['sessionId'] as String?;
+        final enrollmentStatus = enrollmentInfo['status'] as String? ?? 'UNKNOWN';
+        
+        return enrolledSessionId == sessionId && 
+               enrollmentStatus.toUpperCase() == 'ENROLLED';
+      });
+      
+      if (isAlreadyEnrolled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You are already enrolled in this specific class session!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
       await _studentService.enrollInClass(sessionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -147,7 +172,59 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         _loadEnrolledClasses();
       }
     } catch (e) {
-      if (mounted) {
+      safePrint('StudentDashboard: Error enrolling in class: $e');
+      
+      // Handle specific enrollment errors with better user experience
+      if (e.toString().contains('Student already enrolled in this class')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You are already enrolled in this class session!'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } else if (e.toString().contains('time conflict') || 
+                 e.toString().contains('overlapping') ||
+                 e.toString().contains('schedule conflict')) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Schedule Conflict'),
+              content: const Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('This class conflicts with another class you\'re already enrolled in.'),
+                  SizedBox(height: 12),
+                  Text('You cannot be enrolled in two classes that happen at the same time.'),
+                  SizedBox(height: 12),
+                  Text('Please check your enrolled classes and choose a different time slot.'),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    // Switch to enrolled classes tab to view conflicts
+                    _tabController.animateTo(1);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('View My Classes'),
+                ),
+              ],
+            ),
+          );
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error enrolling in class: $e'),
@@ -580,6 +657,35 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final maxStudents = classResult['maxStudents'] as int? ?? 0;
     final isClassFull = currentStudents >= maxStudents;
 
+    // Check for time conflicts with enrolled classes
+    DateTime? classStartTime;
+    DateTime? classEndTime;
+    if (startDateTime != null) {
+      classStartTime = DateTime.tryParse(startDateTime);
+    }
+    if (endDateTime != null) {
+      classEndTime = DateTime.tryParse(endDateTime);
+    }
+
+    bool hasTimeConflict = false;
+    if (classStartTime != null && classEndTime != null) {
+      hasTimeConflict = _enrolledClasses.any((enrolledClass) {
+        final classInfo = enrolledClass['class'] as Map<String, dynamic>;
+        final enrollmentInfo = enrolledClass['enrollment'] as Map<String, dynamic>;
+        final enrollmentStatus = enrollmentInfo['status'] as String? ?? 'UNKNOWN';
+        
+        if (enrollmentStatus.toUpperCase() != 'ENROLLED') return false;
+        
+        final enrolledStartTime = DateTime.tryParse(classInfo['startTime'] as String? ?? '');
+        final enrolledEndTime = DateTime.tryParse(classInfo['endTime'] as String? ?? '');
+        
+        if (enrolledStartTime == null || enrolledEndTime == null) return false;
+        
+        // Check for time overlap
+        return (classStartTime!.isBefore(enrolledEndTime) && classEndTime!.isAfter(enrolledStartTime));
+      });
+    }
+
     return Card(
       margin: EdgeInsets.only(bottom: screenHeight * 0.015),
       elevation: 2,
@@ -606,14 +712,37 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                         ),
                       ),
                       SizedBox(height: screenHeight * 0.005),
-                      Text(
-                        'with $trainerName',
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.04,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            'with $trainerName',
+                            style: TextStyle(
+                              fontSize: screenWidth * 0.04,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          if (hasTimeConflict) ...[
+                            SizedBox(width: screenWidth * 0.02),
+                            Icon(
+                              Icons.schedule_outlined,
+                              size: screenWidth * 0.035,
+                              color: Colors.red,
+                            ),
+                          ],
+                        ],
                       ),
+                      if (hasTimeConflict) ...[
+                        SizedBox(height: screenHeight * 0.005),
+                        Text(
+                          'Conflicts with your schedule',
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.03,
+                            color: Colors.red,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1271,6 +1400,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   }
 
   void _showBookingConfirmation(Map<String, dynamic> classResult) {
+    final sessionId = classResult['sessionId'] as String?;
+    safePrint('StudentDashboard: Showing booking confirmation for session: $sessionId');
+    safePrint('StudentDashboard: Class details: ${classResult.toString()}');
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1287,6 +1420,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               Text('Time: ${_formatApiDateTime(classResult['startDateTime'], classResult['endDateTime'])}'),
             const SizedBox(height: 8),
             Text('Price: \$${classResult['price'] ?? 0}'),
+            if (sessionId != null) ...[
+              const SizedBox(height: 8),
+              Text('Session ID: $sessionId', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
             const SizedBox(height: 16),
             const Text('Would you like to book this class?'),
           ],
@@ -1299,8 +1436,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              if (classResult['sessionId'] != null) {
-                _enrollInClass(classResult['sessionId']);
+              if (sessionId != null) {
+                _enrollInClass(sessionId);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Error: No session ID found for this class'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
               }
             },
             style: ElevatedButton.styleFrom(
