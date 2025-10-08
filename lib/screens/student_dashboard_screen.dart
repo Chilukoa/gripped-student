@@ -31,12 +31,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   List<dynamic> _enrolledClasses = [];
   bool _isLoadingEnrolled = false;
   String? _enrolledError;
+  
+  // Date filtering state for enrolled classes
+  DateTime? _enrolledFromDate;
+  DateTime? _enrolledToDate;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadEnrolledClasses();
+    
+    // Set default filter to show future classes (today to today+90 days)
+    _setEnrolledDateFilter('future');
   }
 
   @override
@@ -54,7 +60,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     });
 
     try {
-      final enrolledData = await _studentService.getEnrolledClasses();
+      // Format dates for API (YYYY-MM-DD format)
+      String? fromDateStr;
+      String? toDateStr;
+      
+      if (_enrolledFromDate != null) {
+        fromDateStr = "${_enrolledFromDate!.year}-${_enrolledFromDate!.month.toString().padLeft(2, '0')}-${_enrolledFromDate!.day.toString().padLeft(2, '0')}";
+      }
+      
+      if (_enrolledToDate != null) {
+        toDateStr = "${_enrolledToDate!.year}-${_enrolledToDate!.month.toString().padLeft(2, '0')}-${_enrolledToDate!.day.toString().padLeft(2, '0')}";
+      }
+      
+      final enrolledData = await _studentService.getEnrolledClasses(
+        fromDate: fromDateStr,
+        toDate: toDateStr,
+      );
+      
       if (mounted) {
         setState(() {
           _enrolledClasses = enrolledData['classes'] ?? [];
@@ -333,6 +355,52 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         );
       }
     }
+  }
+
+  void _setEnrolledDateFilter(String filterType) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    setState(() {
+      switch (filterType) {
+        case 'future':
+          _enrolledFromDate = today;
+          _enrolledToDate = today.add(const Duration(days: 90));
+          break;
+        case 'all':
+          _enrolledFromDate = null;
+          _enrolledToDate = null;
+          break;
+        case 'today':
+          _enrolledFromDate = today;
+          _enrolledToDate = today;
+          break;
+        case 'this_week':
+          final weekStart = today.subtract(Duration(days: today.weekday - 1));
+          final weekEnd = weekStart.add(const Duration(days: 6));
+          _enrolledFromDate = weekStart;
+          _enrolledToDate = weekEnd;
+          break;
+        case 'this_month':
+          _enrolledFromDate = DateTime(today.year, today.month, 1);
+          _enrolledToDate = DateTime(today.year, today.month + 1, 0);
+          break;
+        case 'past':
+          _enrolledFromDate = DateTime(2020, 1, 1); // Far past date
+          _enrolledToDate = today.subtract(const Duration(days: 1));
+          break;
+      }
+    });
+    
+    _loadEnrolledClasses();
+  }
+
+  void _clearEnrolledDateFilters() {
+    setState(() {
+      _enrolledFromDate = null;
+      _enrolledToDate = null;
+    });
+    _loadEnrolledClasses();
   }
 
   @override
@@ -1011,7 +1079,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               ),
               SizedBox(height: screenHeight * 0.01),
               Text(
-                'You haven\'t enrolled in any classes yet.\nUse the Search tab to find classes near you!',
+                (_enrolledFromDate != null || _enrolledToDate != null) 
+                    ? 'No classes found for the selected date range.\nTry adjusting your filter or use the Search tab to find new classes!'
+                    : 'You haven\'t enrolled in any classes yet.\nUse the Search tab to find classes near you!',
                 style: TextStyle(
                   fontSize: screenWidth * 0.04,
                   color: Colors.grey[500],
@@ -1047,14 +1117,95 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'My Enrolled Classes (${_enrolledClasses.length})',
-              style: TextStyle(
-                fontSize: screenWidth * 0.05,
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple,
+            // Header and Controls
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'My Classes (${_enrolledClasses.length})',
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.05,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _showEnrolledDateFilterDialog(screenWidth, screenHeight),
+                  icon: Icon(
+                    Icons.filter_list,
+                    color: (_enrolledFromDate != null || _enrolledToDate != null) 
+                        ? Colors.deepPurple 
+                        : Colors.grey[600],
+                  ),
+                  tooltip: 'Filter by date',
+                ),
+              ],
+            ),
+            
+            // Quick filter chips
+            SizedBox(height: screenHeight * 0.01),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildQuickFilterChip('Future', 'future', screenWidth),
+                  SizedBox(width: screenWidth * 0.02),
+                  _buildQuickFilterChip('All', 'all', screenWidth),
+                  SizedBox(width: screenWidth * 0.02),
+                  _buildQuickFilterChip('Today', 'today', screenWidth),
+                  SizedBox(width: screenWidth * 0.02),
+                  _buildQuickFilterChip('This Week', 'this_week', screenWidth),
+                  SizedBox(width: screenWidth * 0.02),
+                  _buildQuickFilterChip('This Month', 'this_month', screenWidth),
+                  SizedBox(width: screenWidth * 0.02),
+                  _buildQuickFilterChip('Past', 'past', screenWidth),
+                ],
               ),
             ),
+            
+            // Active filter display
+            if (_enrolledFromDate != null || _enrolledToDate != null) ...[
+              SizedBox(height: screenHeight * 0.015),
+              Container(
+                padding: EdgeInsets.all(screenWidth * 0.03),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.filter_list,
+                      size: screenWidth * 0.04,
+                      color: Colors.deepPurple,
+                    ),
+                    SizedBox(width: screenWidth * 0.02),
+                    Expanded(
+                      child: Text(
+                        _getFilterDisplayText(),
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: Colors.deepPurple,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _clearEnrolledDateFilters,
+                      icon: Icon(
+                        Icons.clear,
+                        size: screenWidth * 0.04,
+                        color: Colors.deepPurple,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            
             SizedBox(height: screenHeight * 0.02),
             ListView.builder(
               shrinkWrap: true,
@@ -1573,5 +1724,183 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         );
       }
     }
+  }
+
+  Widget _buildQuickFilterChip(String label, String filterType, double screenWidth) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    bool isActive = false;
+    switch (filterType) {
+      case 'future':
+        isActive = _enrolledFromDate?.isAtSameMomentAs(today) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(today.add(const Duration(days: 90))) == true;
+        break;
+      case 'all':
+        isActive = _enrolledFromDate == null && _enrolledToDate == null;
+        break;
+      case 'today':
+        isActive = _enrolledFromDate?.isAtSameMomentAs(today) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(today) == true;
+        break;
+      case 'this_week':
+        final weekStart = today.subtract(Duration(days: today.weekday - 1));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        isActive = _enrolledFromDate?.isAtSameMomentAs(weekStart) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(weekEnd) == true;
+        break;
+      case 'this_month':
+        final monthStart = DateTime(today.year, today.month, 1);
+        final monthEnd = DateTime(today.year, today.month + 1, 0);
+        isActive = _enrolledFromDate?.isAtSameMomentAs(monthStart) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(monthEnd) == true;
+        break;
+      case 'past':
+        final yesterday = today.subtract(const Duration(days: 1));
+        isActive = _enrolledFromDate?.year == 2020 &&
+                   _enrolledToDate?.isAtSameMomentAs(yesterday) == true;
+        break;
+    }
+
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: screenWidth * 0.032,
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isActive,
+      onSelected: (selected) => _setEnrolledDateFilter(filterType),
+      selectedColor: Colors.deepPurple.withOpacity(0.2),
+      checkmarkColor: Colors.deepPurple,
+      backgroundColor: Colors.grey[200],
+      elevation: isActive ? 2 : 0,
+    );
+  }
+
+  String _getFilterDisplayText() {
+    if (_enrolledFromDate == null && _enrolledToDate == null) {
+      return 'All classes';
+    } else if (_enrolledFromDate != null && _enrolledToDate != null) {
+      final fromStr = "${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}";
+      final toStr = "${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}";
+      return 'From $fromStr to $toStr';
+    } else if (_enrolledFromDate != null) {
+      final fromStr = "${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}";
+      return 'From $fromStr';
+    } else {
+      final toStr = "${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}";
+      return 'Until $toStr';
+    }
+  }
+
+  void _showEnrolledDateFilterDialog(double screenWidth, double screenHeight) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Filter Classes by Date'),
+        content: SizedBox(
+          width: screenWidth * 0.8,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // From Date
+              ListTile(
+                leading: const Icon(Icons.date_range),
+                title: Text(_enrolledFromDate != null 
+                    ? 'From: ${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}'
+                    : 'From: No start date'),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _enrolledFromDate ?? DateTime.now(),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _enrolledFromDate = picked;
+                    });
+                  }
+                },
+              ),
+              
+              // To Date
+              ListTile(
+                leading: const Icon(Icons.date_range),
+                title: Text(_enrolledToDate != null 
+                    ? 'To: ${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}'
+                    : 'To: No end date'),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _enrolledToDate ?? DateTime.now().add(const Duration(days: 90)),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _enrolledToDate = picked;
+                    });
+                  }
+                },
+              ),
+              
+              SizedBox(height: screenHeight * 0.02),
+              
+              // Quick preset buttons
+              Wrap(
+                spacing: 8,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _setEnrolledDateFilter('future');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Future Classes'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _setEnrolledDateFilter('all');
+                    },
+                    child: const Text('All Classes'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _clearEnrolledDateFilters();
+            },
+            child: const Text('Clear Filters'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _loadEnrolledClasses();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
   }
 }

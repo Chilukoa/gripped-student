@@ -91,15 +91,32 @@ class StudentService {
   }
 
   /// Get enrolled classes for the current student
-  Future<Map<String, dynamic>> getEnrolledClasses() async {
+  Future<Map<String, dynamic>> getEnrolledClasses({
+    String? fromDate,
+    String? toDate,
+  }) async {
     try {
       final token = await _getAuthToken();
       
+      // Build query parameters for date filtering
+      final queryParams = <String, String>{};
+      if (fromDate != null && fromDate.isNotEmpty) {
+        queryParams['fromDate'] = fromDate;
+      }
+      if (toDate != null && toDate.isNotEmpty) {
+        queryParams['toDate'] = toDate;
+      }
+      
+      // Build URI with query parameters
+      final uri = Uri.parse('$_baseUrl/students/me/classes');
+      final uriWithQuery = uri.replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+      
       final response = await http.get(
-        Uri.parse('$_baseUrl/students/me/classes'),
+        uriWithQuery,
         headers: _getAuthHeaders(token),
       );
 
+      safePrint('StudentService: Get enrolled classes URL: ${uriWithQuery.toString()}');
       safePrint('StudentService: Get enrolled classes response status: ${response.statusCode}');
       safePrint('StudentService: Get enrolled classes response body: ${response.body}');
 
