@@ -80,6 +80,34 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       if (mounted) {
         setState(() {
           _enrolledClasses = enrolledData['classes'] ?? [];
+          
+          // Sort classes by start time (earliest first)
+          _enrolledClasses.sort((a, b) {
+            final classA = a['class'] as Map<String, dynamic>;
+            final classB = b['class'] as Map<String, dynamic>;
+            
+            final startTimeA = DateTime.tryParse(classA['startTime'] as String? ?? '');
+            final startTimeB = DateTime.tryParse(classB['startTime'] as String? ?? '');
+            
+            // If both have valid start times, sort by start time
+            if (startTimeA != null && startTimeB != null) {
+              return startTimeA.compareTo(startTimeB);
+            }
+            
+            // If only one has a valid start time, prioritize the one with time
+            if (startTimeA != null && startTimeB == null) {
+              return -1; // A comes first
+            }
+            if (startTimeA == null && startTimeB != null) {
+              return 1; // B comes first
+            }
+            
+            // If neither has a valid start time, sort by class name
+            final nameA = classA['className'] as String? ?? '';
+            final nameB = classB['className'] as String? ?? '';
+            return nameA.compareTo(nameB);
+          });
+          
           _isLoadingEnrolled = false;
         });
       }
@@ -1121,12 +1149,40 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'My Classes (${_enrolledClasses.length})',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.05,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'My Classes (${_enrolledClasses.length})',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.05,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                      if (_enrolledClasses.isNotEmpty) ...[
+                        SizedBox(height: screenHeight * 0.003),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.sort,
+                              size: screenWidth * 0.035,
+                              color: Colors.grey[600],
+                            ),
+                            SizedBox(width: screenWidth * 0.01),
+                            Text(
+                              'Sorted by date & time',
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.032,
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 IconButton(
