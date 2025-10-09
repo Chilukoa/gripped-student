@@ -4,7 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/user_profile.dart';
 import '../services/user_service.dart';
 import '../services/auth_service.dart';
-import '../screens/trainer_dashboard_screen.dart';
+import '../screens/student_dashboard_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -24,7 +24,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _displayNameController = TextEditingController();
   final _bioController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _specialtyController = TextEditingController();
   final _address1Controller = TextEditingController();
   final _address2Controller = TextEditingController();
   final _cityController = TextEditingController();
@@ -33,7 +32,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   // Dropdown values
   String _selectedGender = 'Male';
-  List<String> _certifications = [];
 
   // Images
   File? _profileImage;
@@ -45,16 +43,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     'Female',
     'Other',
     'Prefer not to say',
-  ];
-  final List<String> _availableCertifications = [
-    'NASM',
-    'ACSM',
-    'ACE',
-    'NSCA',
-    'CPR',
-    'First Aid',
-    'ISSA',
-    'NCCPT',
   ];
 
   @override
@@ -71,7 +59,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     _displayNameController.dispose();
     _bioController.dispose();
     _phoneController.dispose();
-    _specialtyController.dispose();
     _address1Controller.dispose();
     _address2Controller.dispose();
     _cityController.dispose();
@@ -85,7 +72,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
     if (firstName.isNotEmpty && lastName.isNotEmpty) {
-      _displayNameController.text = '$firstName $lastName - Fitness Trainer';
+      _displayNameController.text = '$firstName $lastName';
     }
   }
 
@@ -117,16 +104,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         );
       }
     }
-  }
-
-  void _toggleCertification(String cert) {
-    setState(() {
-      if (_certifications.contains(cert)) {
-        _certifications.remove(cert);
-      } else {
-        _certifications.add(cert);
-      }
-    });
   }
 
   Future<void> _saveProfile() async {
@@ -177,7 +154,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         displayName: _displayNameController.text.trim(),
         bio: _bioController.text.trim(),
         phone: _phoneController.text.trim(),
-        specialty: _specialtyController.text.trim(),
+        specialty: 'Subscriber', // Hardcoded for student app
         address1: _address1Controller.text.trim(),
         address2: _address2Controller.text.trim().isEmpty
             ? null
@@ -188,7 +165,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         gender: _selectedGender,
         profileImage: profileImageKey,
         idImage: idImageKey,
-        certifications: _certifications,
+        certifications: [], // Empty list for students
       );
 
       await UserService().createOrUpdateUserProfile(profile);
@@ -201,10 +178,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           ),
         );
 
-        // Navigate to trainer dashboard
+        // Navigate to student dashboard
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => const TrainerDashboardScreen(),
+            builder: (context) => const StudentDashboardScreen(),
           ),
         );
       }
@@ -307,7 +284,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     ),
                     SizedBox(height: screenHeight * 0.02),
                     Text(
-                      'Set Up Your Trainer Profile',
+                      'Set Up Your Student Profile',
                       style: TextStyle(
                         fontSize: screenWidth * 0.06,
                         fontWeight: FontWeight.bold,
@@ -414,17 +391,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       return null;
                     },
                   ),
-                  _buildTextField(
-                    controller: _specialtyController,
-                    label: 'Specialty *',
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Specialty is required';
-                      }
-                      return null;
-                    },
-                  ),
-                  _buildCertificationsSection(screenWidth),
                 ],
                 screenWidth,
                 screenHeight,
@@ -649,41 +615,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         return DropdownMenuItem<String>(value: item, child: Text(item));
       }).toList(),
       onChanged: onChanged,
-    );
-  }
-
-  Widget _buildCertificationsSection(double screenWidth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Certifications',
-          style: TextStyle(
-            fontSize: screenWidth * 0.04,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _availableCertifications.map((cert) {
-            final isSelected = _certifications.contains(cert);
-            return FilterChip(
-              label: Text(cert),
-              selected: isSelected,
-              onSelected: (_) => _toggleCertification(cert),
-              selectedColor: Colors.deepPurple.withOpacity(0.2),
-              backgroundColor: Colors.grey[200],
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.deepPurple : Colors.grey[700],
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            );
-          }).toList(),
-        ),
-      ],
     );
   }
 

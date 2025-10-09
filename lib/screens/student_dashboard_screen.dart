@@ -35,6 +35,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   // Date filtering state for enrolled classes
   DateTime? _enrolledFromDate;
   DateTime? _enrolledToDate;
+  bool _showCancelledClasses = false;
 
   @override
   void initState() {
@@ -79,10 +80,48 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       
       if (mounted) {
         setState(() {
-          _enrolledClasses = enrolledData['classes'] ?? [];
+          List<dynamic> allClasses = enrolledData['classes'] ?? [];
+          safePrint('StudentDashboard: Total classes from API: ${allClasses.length}');
+          
+          // Filter classes based on status and enrollment status
+          List<dynamic> filteredClasses = allClasses.where((enrolledClass) {
+            final classInfo = enrolledClass['class'] as Map<String, dynamic>;
+            final enrollmentInfo = enrolledClass['enrollment'] as Map<String, dynamic>;
+            
+            final className = classInfo['className'] as String? ?? 'Unknown';
+            final classStatus = classInfo['status'] as String? ?? 'ACTIVE';
+            final enrollmentStatus = enrollmentInfo['status'] as String? ?? 'UNKNOWN';
+            
+            safePrint('StudentDashboard: Processing class "$className" - classStatus: $classStatus, enrollmentStatus: $enrollmentStatus');
+            
+            // If _showCancelledClasses is false, only show ENROLLED enrollments
+            if (!_showCancelledClasses) {
+              if (enrollmentStatus.toUpperCase() != 'ENROLLED') {
+                safePrint('StudentDashboard: Filtering out "$className" - enrollment not ENROLLED');
+                return false;
+              }
+              
+              // Also filter out cancelled classes (by trainer) if checkbox is not checked
+              if (classStatus.toUpperCase() == 'CANCELLED') {
+                safePrint('StudentDashboard: Filtering out "$className" - class cancelled by trainer');
+                return false;
+              }
+            } else {
+              // If _showCancelledClasses is true, show ENROLLED, UNENROLLED, and CANCELLED enrollments
+              if (enrollmentStatus.toUpperCase() != 'ENROLLED' && 
+                  enrollmentStatus.toUpperCase() != 'UNENROLLED' &&
+                  enrollmentStatus.toUpperCase() != 'CANCELLED') {
+                safePrint('StudentDashboard: Filtering out "$className" - enrollment status not ENROLLED, UNENROLLED, or CANCELLED');
+                return false;
+              }
+            }
+            
+            safePrint('StudentDashboard: Including class "$className" in results');
+            return true;
+          }).toList();
           
           // Sort classes by start time (earliest first)
-          _enrolledClasses.sort((a, b) {
+          filteredClasses.sort((a, b) {
             final classA = a['class'] as Map<String, dynamic>;
             final classB = b['class'] as Map<String, dynamic>;
             
@@ -107,7 +146,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             final nameB = classB['className'] as String? ?? '';
             return nameA.compareTo(nameB);
           });
-          
+
+          safePrint('StudentDashboard: After filtering, showing ${filteredClasses.length} classes (showCancelled: $_showCancelledClasses)');
+          _enrolledClasses = filteredClasses;
           _isLoadingEnrolled = false;
         });
       }
@@ -1085,45 +1126,208 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     }
 
     if (_enrolledClasses.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(screenWidth * 0.04),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.class_,
-                size: screenWidth * 0.2,
-                color: Colors.grey[400],
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(screenWidth * 0.04),
+        child: Column(
+          children: [
+            // Show filter controls when filters are active
+            if (_enrolledFromDate != null || _enrolledToDate != null) ...[
+              // Header and Controls (same as main view)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'My Classes (0)',
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.05,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple,
+                          ),
+                        ),
+                        SizedBox(height: screenHeight * 0.003),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.sort,
+                              size: screenWidth * 0.035,
+                              color: Colors.grey[600],
+                            ),
+                            SizedBox(width: screenWidth * 0.01),
+                            Text(
+                              'Sorted by date & time',
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.032,
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _showEnrolledDateFilterDialog(screenWidth, screenHeight),
+                    icon: Icon(
+                      Icons.filter_list,
+                      color: Colors.deepPurple,
+                    ),
+                    tooltip: 'Filter by date',
+                  ),
+                ],
+              ),
+              
+              // Quick filter chips
+              SizedBox(height: screenHeight * 0.01),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildQuickFilterChip('Future', 'future', screenWidth),
+                    SizedBox(width: screenWidth * 0.02),
+                    _buildQuickFilterChip('All', 'all', screenWidth),
+                    SizedBox(width: screenWidth * 0.02),
+                    _buildQuickFilterChip('Today', 'today', screenWidth),
+                    SizedBox(width: screenWidth * 0.02),
+                    _buildQuickFilterChip('This Week', 'this_week', screenWidth),
+                    SizedBox(width: screenWidth * 0.02),
+                    _buildQuickFilterChip('This Month', 'this_month', screenWidth),
+                    SizedBox(width: screenWidth * 0.02),
+                    _buildQuickFilterChip('Past', 'past', screenWidth),
+                  ],
+                ),
+              ),
+              
+              // Show cancelled classes checkbox in empty state
+              CheckboxListTile(
+                title: Text(
+                  'Show cancelled classes',
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.04,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                value: _showCancelledClasses,
+                onChanged: (value) {
+                  setState(() {
+                    _showCancelledClasses = value ?? false;
+                  });
+                  _loadEnrolledClasses();
+                },
+                activeColor: Colors.deepPurple,
+                contentPadding: EdgeInsets.zero,
+              ),
+              
+              // Active filter display
+              SizedBox(height: screenHeight * 0.015),
+              Container(
+                padding: EdgeInsets.all(screenWidth * 0.03),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.filter_list,
+                      size: screenWidth * 0.04,
+                      color: Colors.deepPurple,
+                    ),
+                    SizedBox(width: screenWidth * 0.02),
+                    Expanded(
+                      child: Text(
+                        _getFilterDisplayText(),
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: Colors.deepPurple,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _clearEnrolledDateFilters,
+                      icon: Icon(
+                        Icons.clear,
+                        size: screenWidth * 0.04,
+                        color: Colors.deepPurple,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              
+              SizedBox(height: screenHeight * 0.04),
+            ],
+            
+            // Empty state content
+            Icon(
+              Icons.class_,
+              size: screenWidth * 0.2,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: screenHeight * 0.02),
+            Text(
+              (_enrolledFromDate != null || _enrolledToDate != null) 
+                  ? 'No Classes Found'
+                  : 'No Enrolled Classes',
+              style: TextStyle(
+                fontSize: screenWidth * 0.06,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+            SizedBox(height: screenHeight * 0.01),
+            Text(
+              (_enrolledFromDate != null || _enrolledToDate != null) 
+                  ? 'No classes found for the selected date range.\nTry adjusting your filter or use the Search tab to find new classes!'
+                  : 'You haven\'t enrolled in any classes yet.\nUse the Search tab to find classes near you!',
+              style: TextStyle(
+                fontSize: screenWidth * 0.04,
+                color: Colors.grey[500],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: screenHeight * 0.03),
+            
+            // Action buttons
+            if (_enrolledFromDate != null || _enrolledToDate != null) ...[
+              // Clear filters button when filters are active
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _clearEnrolledDateFilters,
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Clear Filters'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(
+                      vertical: screenHeight * 0.015,
+                    ),
+                  ),
+                ),
               ),
               SizedBox(height: screenHeight * 0.02),
-              Text(
-                'No Enrolled Classes',
-                style: TextStyle(
-                  fontSize: screenWidth * 0.06,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              SizedBox(height: screenHeight * 0.01),
-              Text(
-                (_enrolledFromDate != null || _enrolledToDate != null) 
-                    ? 'No classes found for the selected date range.\nTry adjusting your filter or use the Search tab to find new classes!'
-                    : 'You haven\'t enrolled in any classes yet.\nUse the Search tab to find classes near you!',
-                style: TextStyle(
-                  fontSize: screenWidth * 0.04,
-                  color: Colors.grey[500],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: screenHeight * 0.03),
-              ElevatedButton(
+            ],
+            
+            // Search classes button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
                 onPressed: () => _tabController.animateTo(0),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
+                  backgroundColor: (_enrolledFromDate != null || _enrolledToDate != null) 
+                      ? Colors.grey[600] 
+                      : Colors.deepPurple,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(
-                    horizontal: screenWidth * 0.08,
                     vertical: screenHeight * 0.015,
                   ),
                 ),
@@ -1132,8 +1336,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   style: TextStyle(fontSize: screenWidth * 0.04),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -1196,6 +1400,27 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   tooltip: 'Filter by date',
                 ),
               ],
+            ),
+            
+            // Show cancelled classes checkbox
+            CheckboxListTile(
+              title: Text(
+                'Show cancelled classes',
+                style: TextStyle(
+                  fontSize: screenWidth * 0.04,
+                  color: Colors.grey[700],
+                ),
+              ),
+              value: _showCancelledClasses,
+              onChanged: (value) {
+                safePrint('StudentDashboard: Checkbox changed to ${value ?? false}');
+                setState(() {
+                  _showCancelledClasses = value ?? false;
+                });
+                _loadEnrolledClasses();
+              },
+              activeColor: Colors.deepPurple,
+              contentPadding: EdgeInsets.zero,
             ),
             
             // Quick filter chips
@@ -1294,10 +1519,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final overview = classInfo['overview'] as String?;
     final classTags = (classInfo['classTags'] as List<dynamic>?)?.cast<String>();
     final enrollmentStatus = enrollmentInfo['status'] as String? ?? 'UNKNOWN';
+    final classStatus = classInfo['status'] as String? ?? 'ACTIVE';
     final enrolledAt = enrollmentInfo['enrolledAt'] as String?;
 
     final isPast = endTime != null && endTime.isBefore(DateTime.now());
-    final isCancelled = enrollmentStatus.toUpperCase() == 'CANCELLED';
+    final isClassCancelled = classStatus.toUpperCase() == 'CANCELLED';
+    final isStudentUnenrolled = enrollmentStatus.toUpperCase() == 'UNENROLLED';
+    final isEnrollmentCancelled = enrollmentStatus.toUpperCase() == 'CANCELLED';
 
     return Card(
       margin: EdgeInsets.only(bottom: screenHeight * 0.015),
@@ -1339,16 +1567,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isCancelled
+                    color: isClassCancelled || isEnrollmentCancelled
                         ? Colors.red
+                        : isStudentUnenrolled
+                        ? Colors.orange
                         : isPast
                         ? Colors.grey
                         : Colors.green,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    isCancelled
-                        ? 'CANCELLED'
+                    isClassCancelled || isEnrollmentCancelled
+                        ? 'CLASS CANCELLED'
+                        : isStudentUnenrolled
+                        ? 'UNENROLLED'
                         : isPast
                         ? 'COMPLETED'
                         : 'ACTIVE',
@@ -1469,7 +1701,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             ],
             
             // Action buttons
-            if (!isCancelled && !isPast && sessionId != null) ...[
+            if (!isClassCancelled && !isStudentUnenrolled && !isEnrollmentCancelled && !isPast && sessionId != null) ...[
               SizedBox(height: screenHeight * 0.015),
               SizedBox(
                 width: double.infinity,
