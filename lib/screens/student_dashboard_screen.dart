@@ -798,10 +798,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     DateTime? classStartTime;
     DateTime? classEndTime;
     if (startDateTime != null) {
-      classStartTime = DateTime.tryParse(startDateTime);
+      classStartTime = DateTime.tryParse(startDateTime)?.toLocal();
     }
     if (endDateTime != null) {
-      classEndTime = DateTime.tryParse(endDateTime);
+      classEndTime = DateTime.tryParse(endDateTime)?.toLocal();
     }
 
     bool hasTimeConflict = false;
@@ -813,8 +813,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         
         if (enrollmentStatus.toUpperCase() != 'ENROLLED') return false;
         
-        final enrolledStartTime = DateTime.tryParse(classInfo['startTime'] as String? ?? '');
-        final enrolledEndTime = DateTime.tryParse(classInfo['endTime'] as String? ?? '');
+        final enrolledStartTime = DateTime.tryParse(classInfo['startTime'] as String? ?? '')?.toLocal();
+        final enrolledEndTime = DateTime.tryParse(classInfo['endTime'] as String? ?? '')?.toLocal();
         
         if (enrolledStartTime == null || enrolledEndTime == null) return false;
         
@@ -1508,8 +1508,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final enrollmentInfo = enrolledClass['enrollment'] as Map<String, dynamic>;
     
     final className = classInfo['className'] as String? ?? 'Unknown Class';
-    final startTime = DateTime.tryParse(classInfo['startTime'] as String? ?? '');
-    final endTime = DateTime.tryParse(classInfo['endTime'] as String? ?? '');
+    final startTime = DateTime.tryParse(classInfo['startTime'] as String? ?? '')?.toLocal();
+    final endTime = DateTime.tryParse(classInfo['endTime'] as String? ?? '')?.toLocal();
     final city = classInfo['city'] as String?;
     final state = classInfo['state'] as String?;
     final pricePerClass = (classInfo['pricePerClass'] as num?)?.toDouble() ?? 0.0;
@@ -1748,8 +1748,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     if (startDateTime == null) return 'Time TBD';
     
     try {
-      final startTime = DateTime.parse(startDateTime);
-      final endTime = endDateTime != null ? DateTime.parse(endDateTime) : null;
+      // Parse UTC time strings and convert to local time
+      final startTime = DateTime.parse(startDateTime).toLocal();
+      final endTime = endDateTime != null ? DateTime.parse(endDateTime).toLocal() : null;
       
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
