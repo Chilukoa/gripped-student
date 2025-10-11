@@ -94,24 +94,28 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             
             safePrint('StudentDashboard: Processing class "$className" - classStatus: $classStatus, enrollmentStatus: $enrollmentStatus');
             
-            // If _showCancelledClasses is false, only show ENROLLED enrollments
+            // If _showCancelledClasses is false, show ENROLLED, COMPLETED, and NOTCOMPLETED enrollments
             if (!_showCancelledClasses) {
-              if (enrollmentStatus.toUpperCase() != 'ENROLLED') {
-                safePrint('StudentDashboard: Filtering out "$className" - enrollment not ENROLLED');
+              if (enrollmentStatus.toUpperCase() != 'ENROLLED' && 
+                  enrollmentStatus.toUpperCase() != 'COMPLETED' &&
+                  enrollmentStatus.toUpperCase() != 'NOTCOMPLETED') {
+                safePrint('StudentDashboard: Filtering out "$className" - enrollment not ENROLLED, COMPLETED, or NOTCOMPLETED');
                 return false;
               }
               
-              // Also filter out cancelled classes (by trainer) if checkbox is not checked
+              // Show ACTIVE, COMPLETED, and NOTCOMPLETED classes, but filter out CANCELLED classes
               if (classStatus.toUpperCase() == 'CANCELLED') {
                 safePrint('StudentDashboard: Filtering out "$className" - class cancelled by trainer');
                 return false;
               }
             } else {
-              // If _showCancelledClasses is true, show ENROLLED, UNENROLLED, and CANCELLED enrollments
+              // If _showCancelledClasses is true, show ENROLLED, COMPLETED, NOTCOMPLETED, UNENROLLED, and CANCELLED enrollments
               if (enrollmentStatus.toUpperCase() != 'ENROLLED' && 
+                  enrollmentStatus.toUpperCase() != 'COMPLETED' &&
+                  enrollmentStatus.toUpperCase() != 'NOTCOMPLETED' &&
                   enrollmentStatus.toUpperCase() != 'UNENROLLED' &&
                   enrollmentStatus.toUpperCase() != 'CANCELLED') {
-                safePrint('StudentDashboard: Filtering out "$className" - enrollment status not ENROLLED, UNENROLLED, or CANCELLED');
+                safePrint('StudentDashboard: Filtering out "$className" - enrollment status not in allowed list');
                 return false;
               }
             }
@@ -1205,7 +1209,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               // Show cancelled classes checkbox in empty state
               CheckboxListTile(
                 title: Text(
-                  'Show cancelled classes',
+                  'Show cancelled/unenrolled classes',
                   style: TextStyle(
                     fontSize: screenWidth * 0.04,
                     color: Colors.grey[700],
@@ -1405,7 +1409,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             // Show cancelled classes checkbox
             CheckboxListTile(
               title: Text(
-                'Show cancelled classes',
+                'Show cancelled/unenrolled classes',
                 style: TextStyle(
                   fontSize: screenWidth * 0.04,
                   color: Colors.grey[700],
@@ -1571,6 +1575,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                         ? Colors.red
                         : isStudentUnenrolled
                         ? Colors.orange
+                        : enrollmentStatus.toUpperCase() == 'COMPLETED'
+                        ? Colors.blue
+                        : enrollmentStatus.toUpperCase() == 'NOTCOMPLETED'
+                        ? Colors.purple
+                        : classStatus.toUpperCase() == 'COMPLETED'
+                        ? Colors.blue
+                        : classStatus.toUpperCase() == 'NOTCOMPLETED'
+                        ? Colors.purple
                         : isPast
                         ? Colors.grey
                         : Colors.green,
@@ -1581,8 +1593,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                         ? 'CLASS CANCELLED'
                         : isStudentUnenrolled
                         ? 'UNENROLLED'
-                        : isPast
+                        : enrollmentStatus.toUpperCase() == 'COMPLETED'
                         ? 'COMPLETED'
+                        : enrollmentStatus.toUpperCase() == 'NOTCOMPLETED'
+                        ? 'NOT COMPLETED'
+                        : classStatus.toUpperCase() == 'COMPLETED'
+                        ? 'COMPLETED'
+                        : classStatus.toUpperCase() == 'NOTCOMPLETED'
+                        ? 'NOT COMPLETED'
+                        : isPast
+                        ? 'PAST'
                         : 'ACTIVE',
                     style: const TextStyle(
                       color: Colors.white,
