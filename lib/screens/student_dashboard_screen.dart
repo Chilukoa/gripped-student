@@ -1530,6 +1530,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final isClassCancelled = classStatus.toUpperCase() == 'CANCELLED';
     final isStudentUnenrolled = enrollmentStatus.toUpperCase() == 'UNENROLLED';
     final isEnrollmentCancelled = enrollmentStatus.toUpperCase() == 'CANCELLED';
+    final isEnrollmentCompleted = enrollmentStatus.toUpperCase() == 'COMPLETED';
+    final isClassCompleted = classStatus.toUpperCase() == 'COMPLETED';
 
     return Card(
       margin: EdgeInsets.only(bottom: screenHeight * 0.015),
@@ -1721,7 +1723,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             ],
             
             // Action buttons
-            if (!isClassCancelled && !isStudentUnenrolled && !isEnrollmentCancelled && !isPast && sessionId != null) ...[
+            if (!isClassCancelled && !isStudentUnenrolled && !isEnrollmentCancelled && !isEnrollmentCompleted && !isClassCompleted && !isPast && sessionId != null) ...[
               SizedBox(height: screenHeight * 0.015),
               SizedBox(
                 width: double.infinity,

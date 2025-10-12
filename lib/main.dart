@@ -3,11 +3,14 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/login_screen.dart';
 import '../screens/profile_setup_screen.dart';
-import '../screens/trainer_dashboard_screen.dart';
 import '../screens/student_dashboard_screen.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models/user_profile.dart' as models;
+
+// App configuration - defines what role this app is designed for
+const String EXPECTED_USER_ROLE =
+    'subscriber'; // This app is designed for subscribers only
 
 void main() {
   runApp(const MyApp());
@@ -85,6 +88,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
   bool _hasProfile = false;
   models.UserProfile? _userProfile;
+  String? _roleError; // Add role validation error state
 
   @override
   void initState() {
@@ -108,10 +112,26 @@ class _AuthWrapperState extends State<AuthWrapper> {
           final userService = UserService();
           final profile = await userService.getUserProfile();
           safePrint('Retrieved profile: ${profile?.toJson()}');
+          
+          // Role validation - check if user role matches expected role for this app
+          if (profile != null && profile.role != EXPECTED_USER_ROLE) {
+            safePrint(
+              'ROLE VALIDATION FAILED: User role is ${profile.role}, but app expects $EXPECTED_USER_ROLE',
+            );
+            setState(() {
+              _roleError =
+                  'This email is registered as ${profile.role} and can not be signed into student app. Please signup with different email to register as subscriber';
+              _isLoading = false;
+            });
+            safePrint('ROLE ERROR SET: _roleError = $_roleError');
+            return;
+          }
+          
           final hasCompleteProfile =
               profile != null && profile.isProfileComplete;
 
           safePrint('Profile check - profile exists: ${profile != null}');
+          safePrint('Profile check - role: ${profile?.role}');
           safePrint(
             'Profile check - isComplete: ${profile?.isProfileComplete}',
           );
@@ -119,6 +139,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
           if (mounted) {
             setState(() {
+              _roleError = null; // Clear any previous role error
               _isSignedIn = true;
               _hasProfile = hasCompleteProfile;
               _userProfile = profile;
@@ -160,8 +181,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    safePrint(
+      'BUILD METHOD - _isLoading: $_isLoading, _isSignedIn: $_isSignedIn, _hasProfile: $_hasProfile, _roleError: $_roleError',
+    );
+    
     if (_isLoading) {
       return const SplashScreen();
+    }
+
+    // Check for role error first - this takes precedence over other states
+    if (_roleError != null) {
+      safePrint('SHOWING ROLE ERROR SCREEN with message: $_roleError');
+      return RoleErrorScreen(errorMessage: _roleError!);
     }
 
     if (!_isSignedIn) {
@@ -172,18 +203,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const ProfileSetupScreen();
     }
 
-    // Navigate to appropriate dashboard based on user role
+    // Navigate to appropriate dashboard - should only be subscriber at this point
     safePrint('User profile: ${_userProfile?.toJson()}');
     safePrint('User role: ${_userProfile?.role}');
     safePrint('Role toLowerCase: ${_userProfile?.role.toLowerCase()}');
 
-    if (_userProfile?.role.toLowerCase() == 'subscriber') {
-      safePrint('Navigating to StudentDashboardScreen');
-      return const StudentDashboardScreen();
-    } else {
-      safePrint('Navigating to TrainerDashboardScreen (default)');
-      return const TrainerDashboardScreen();
-    }
+    // Since we validated role earlier, this should always be subscriber
+    safePrint('Navigating to StudentDashboardScreen');
+    return const StudentDashboardScreen();
   }
 }
 
@@ -479,6 +506,79 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: _incrementCounter,
         tooltip: 'Increment',
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class RoleErrorScreen extends StatelessWidget {
+  final String errorMessage;
+
+  const RoleErrorScreen({super.key, required this.errorMessage});
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await AuthService().signOut();
+      if (context.mounted) {
+        // Navigate directly to login screen
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error signing out: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                errorMessage,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.black87,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _signOut(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Sign Out',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
