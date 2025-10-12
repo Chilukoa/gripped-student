@@ -204,4 +204,36 @@ class UserService {
       return null;
     }
   }
+
+  // Method to get presigned download URL for viewing images
+  Future<String?> getDownloadUrl(String imageKey, String userId) async {
+    try {
+      final fullKey = 'profiles/$userId/$imageKey.jpg';
+      safePrint('Getting download URL for key: $fullKey');
+
+      final headers = await _getAuthHeaders();
+
+      final response = await http.get(
+        Uri.parse('${app_config.ApiConfig.getDownloadUrl}?key=$fullKey'),
+        headers: headers,
+      );
+
+      safePrint('Download URL response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final downloadUrl = data['downloadUrl'];
+        safePrint('Got download URL successfully');
+        return downloadUrl;
+      } else {
+        safePrint(
+          'Failed to get download URL: ${response.statusCode} - ${response.body}',
+        );
+        return null;
+      }
+    } catch (e) {
+      safePrint('Error getting download URL: $e');
+      return null;
+    }
+  }
 }

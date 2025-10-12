@@ -28,6 +28,7 @@ class ApiConfig {
   static String get getUserProfile => '$baseUrl/profile/me';
   static String get updateUserProfile => '$baseUrl/profile/me';
   static String get getPresignedUrls => '$baseUrl/profile/presigned-url';
+  static String get getDownloadUrl => '$baseUrl/profile/download-url';
   static String get deleteUserProfile => '$baseUrl/profile/me';
 
   // Class endpoints
