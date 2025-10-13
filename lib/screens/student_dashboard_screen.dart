@@ -790,6 +790,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final state = classResult['state'] as String? ?? '';
     final zipCode = classResult['zip'] as String? ?? '';
     final price = classResult['price'] as num? ?? 0;
+    final studentCost = classResult['studentCost'] as num? ?? (price * 1.13); // Fallback calculation if studentCost not available
     final distanceMiles = classResult['distanceMiles'] as num? ?? 0;
     final startDateTime = classResult['startDateTime'] as String?;
     final endDateTime = classResult['endDateTime'] as String?;
@@ -891,7 +892,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '\$${price.toStringAsFixed(0)}',
+                      '\$${studentCost.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: screenWidth * 0.05,
                         fontWeight: FontWeight.bold,
@@ -1517,6 +1518,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final city = classInfo['city'] as String?;
     final state = classInfo['state'] as String?;
     final pricePerClass = (classInfo['pricePerClass'] as num?)?.toDouble() ?? 0.0;
+    final studentCost = (classInfo['studentCost'] as num?)?.toDouble() ?? (pricePerClass * 1.13); // Fallback calculation if studentCost not available
     final capacity = classInfo['capacity'] as int? ?? 0;
     final countRegistered = classInfo['countRegistered'] as int? ?? 0;
     final sessionId = classInfo['sessionId'] as String?;
@@ -1674,7 +1676,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                 ),
                 SizedBox(width: screenWidth * 0.02),
                 Text(
-                  '\$${pricePerClass.toStringAsFixed(2)}',
+                  '\$${studentCost.toStringAsFixed(2)}',
                   style: TextStyle(
                     fontSize: screenWidth * 0.035,
                     color: Colors.grey[600],
@@ -1837,8 +1839,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                 Text('Location: ${classResult['address']}'),
                 const SizedBox(height: 8),
               ],
-              if (classResult['price'] != null) ...[
-                Text('Price: \$${classResult['price']}'),
+              if (classResult['studentCost'] != null || classResult['price'] != null) ...[
+                Text('Price: \$${(classResult['studentCost'] as num? ?? (classResult['price'] as num? ?? 0) * 1.13).toStringAsFixed(2)}'),
                 const SizedBox(height: 8),
               ],
               if (classResult['maxStudents'] != null) ...[
@@ -1881,7 +1883,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
             if (classResult['startDateTime'] != null)
               Text('Time: ${_formatApiDateTime(classResult['startDateTime'], classResult['endDateTime'])}'),
             const SizedBox(height: 8),
-            Text('Price: \$${classResult['price'] ?? 0}'),
+            Text('Price: \$${(classResult['studentCost'] as num? ?? (classResult['price'] as num? ?? 0) * 1.13).toStringAsFixed(2)}'),
             if (sessionId != null) ...[
               const SizedBox(height: 8),
               Text('Session ID: $sessionId', style: const TextStyle(fontSize: 12, color: Colors.grey)),
