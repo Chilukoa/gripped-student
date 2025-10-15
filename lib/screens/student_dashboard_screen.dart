@@ -27,6 +27,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   String? _searchError;
   DateTime? _selectedDate;
   
+  // Trainer ratings cache for search results
+  Map<String, Map<String, dynamic>?> _trainerRatingsCache = {};
+  
   // Enrolled classes tab state
   List<dynamic> _enrolledClasses = [];
   bool _isLoadingEnrolled = false;
@@ -216,6 +219,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
           _searchResults = results;
           _isSearching = false;
         });
+        
+        // Load trainer ratings for search results
+        _loadTrainerRatingsForSearchResults(results);
       }
     } catch (e) {
       safePrint('StudentDashboard: Error searching classes: $e');
@@ -224,6 +230,38 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
           _searchError = e.toString();
           _isSearching = false;
         });
+      }
+    }
+  }
+
+  Future<void> _loadTrainerRatingsForSearchResults(List<Map<String, dynamic>> results) async {
+    // Extract unique trainer IDs from search results
+    final Set<String> trainerIds = {};
+    for (final result in results) {
+      final trainerId = result['trainerId'] as String?;
+      if (trainerId != null && trainerId.isNotEmpty) {
+        trainerIds.add(trainerId);
+      }
+    }
+
+    // Load ratings for each unique trainer
+    for (final trainerId in trainerIds) {
+      if (!_trainerRatingsCache.containsKey(trainerId)) {
+        try {
+          final rating = await _studentService.getTrainerRating(trainerId);
+          if (mounted) {
+            setState(() {
+              _trainerRatingsCache[trainerId] = rating;
+            });
+          }
+        } catch (e) {
+          safePrint('StudentDashboard: Error loading rating for trainer $trainerId: $e');
+          if (mounted) {
+            setState(() {
+              _trainerRatingsCache[trainerId] = null;
+            });
+          }
+        }
       }
     }
   }
@@ -785,6 +823,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   Widget _buildSearchResultCard(Map<String, dynamic> classResult, double screenWidth, double screenHeight) {
     final classTitle = classResult['classTitle'] as String? ?? 'Unknown Class';
     final trainerName = classResult['trainerName'] as String? ?? 'Unknown Trainer';
+    final trainerId = classResult['trainerId'] as String?;
     final address = classResult['address'] as String? ?? '';
     final city = classResult['city'] as String? ?? '';
     final state = classResult['state'] as String? ?? '';
@@ -798,6 +837,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final currentStudents = classResult['currentStudents'] as int? ?? 0;
     final maxStudents = classResult['maxStudents'] as int? ?? 0;
     final isClassFull = currentStudents >= maxStudents;
+
+    // Get trainer rating from cache
+    final trainerRating = trainerId != null ? _trainerRatingsCache[trainerId] : null;
 
     // Check for time conflicts with enrolled classes
     DateTime? classStartTime;
@@ -854,22 +896,29 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                         ),
                       ),
                       SizedBox(height: screenHeight * 0.005),
-                      Row(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'with $trainerName',
-                            style: TextStyle(
-                              fontSize: screenWidth * 0.04,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black87,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTrainerNameDisplay(trainerId, trainerName, trainerRating, screenWidth),
+                              ),
+                              if (hasTimeConflict) ...[
+                                SizedBox(width: screenWidth * 0.02),
+                                Icon(
+                                  Icons.schedule_outlined,
+                                  size: screenWidth * 0.035,
+                                  color: Colors.red,
+                                ),
+                              ],
+                            ],
                           ),
-                          if (hasTimeConflict) ...[
-                            SizedBox(width: screenWidth * 0.02),
-                            Icon(
-                              Icons.schedule_outlined,
-                              size: screenWidth * 0.035,
-                              color: Colors.red,
+                          if (trainerRating != null && (trainerRating['totalRatings'] as int? ?? 0) > 0) ...[
+                            SizedBox(height: screenHeight * 0.005),
+                            GestureDetector(
+                              onTap: () => _showTrainerRatingDetails(trainerId!, trainerName),
+                              child: _buildRatingDisplay(trainerRating, screenWidth),
                             ),
                           ],
                         ],
@@ -1527,6 +1576,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     final enrollmentStatus = enrollmentInfo['status'] as String? ?? 'UNKNOWN';
     final classStatus = classInfo['status'] as String? ?? 'ACTIVE';
     final enrolledAt = enrollmentInfo['enrolledAt'] as String?;
+    final trainerId = classInfo['trainerId'] as String?; // Extract trainerId for rating functionality
 
     final isPast = endTime != null && endTime.isBefore(DateTime.now());
     final isClassCancelled = classStatus.toUpperCase() == 'CANCELLED';
@@ -1736,6 +1786,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                     foregroundColor: Colors.white,
                   ),
                   child: const Text('Unenroll from Class'),
+                ),
+              ),
+            ],
+            
+            // Rate Trainer button for completed classes
+            if ((isEnrollmentCompleted || isClassCompleted) && trainerId != null) ...[
+              SizedBox(height: screenHeight * 0.015),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showRatingDialog(trainerId, className),
+                  icon: const Icon(Icons.star_rate),
+                  label: const Text('Rate Trainer'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -2211,6 +2278,510 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               foregroundColor: Colors.white,
             ),
             child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRatingDialog(String trainerId, String className) async {
+    try {
+      // Check if student has already rated this trainer
+      final existingRating = await _studentService.getStudentRatingForTrainer(trainerId);
+      
+      // Initialize form values
+      int currentRating = existingRating?['rating'] ?? 0;
+      String currentFeedback = existingRating?['feedback'] ?? '';
+      bool currentIsAnonymous = existingRating?['isAnonymous'] ?? false;
+      final bool isUpdate = existingRating != null;
+      
+      // Controllers for the dialog
+      final feedbackController = TextEditingController(text: currentFeedback);
+      
+      // State variables for the dialog
+      int selectedRating = currentRating;
+      bool isAnonymous = currentIsAnonymous;
+      bool isSubmitting = false;
+      
+      if (mounted) {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(isUpdate ? 'Update Rating' : 'Rate Trainer'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Class: $className',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    if (isUpdate && !currentIsAnonymous) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'You previously rated this trainer ${currentRating} star${currentRating != 1 ? 's' : ''}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (isUpdate && currentIsAnonymous) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.visibility_off, size: 16, color: Colors.orange),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'You previously submitted an anonymous rating for this trainer',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Rating stars
+                      const Text(
+                        'Rating *',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          return GestureDetector(
+                            onTap: isSubmitting ? null : () {
+                              setState(() {
+                                selectedRating = index + 1;
+                              });
+                            },
+                            child: Icon(
+                              index < selectedRating ? Icons.star : Icons.star_border,
+                              color: index < selectedRating ? Colors.amber : Colors.grey,
+                              size: 40,
+                            ),
+                          );
+                        }),
+                      ),
+                      if (selectedRating > 0) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          selectedRating == 1 ? 'Poor' :
+                          selectedRating == 2 ? 'Fair' :
+                          selectedRating == 3 ? 'Good' :
+                          selectedRating == 4 ? 'Very Good' : 'Excellent',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Feedback
+                      const Text(
+                        'Feedback (Optional)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: feedbackController,
+                        enabled: !isSubmitting,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          hintText: 'Share your experience with this trainer...',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Anonymous checkbox
+                      CheckboxListTile(
+                        title: const Text('Submit anonymously'),
+                        subtitle: const Text(
+                          'Your name will not be shown with this rating',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: isAnonymous,
+                        onChanged: isSubmitting ? null : (value) {
+                          setState(() {
+                            isAnonymous = value ?? false;
+                          });
+                        },
+                        activeColor: Colors.deepPurple,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSubmitting ? null : () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: (isSubmitting || selectedRating == 0) ? null : () async {
+                      setState(() {
+                        isSubmitting = true;
+                      });
+                      
+                      try {
+                        if (isUpdate) {
+                          await _studentService.updateRating(
+                            trainerId: trainerId,
+                            rating: selectedRating,
+                            feedback: feedbackController.text.trim().isEmpty ? null : feedbackController.text.trim(),
+                            isAnonymous: isAnonymous,
+                          );
+                        } else {
+                          await _studentService.submitRating(
+                            trainerId: trainerId,
+                            rating: selectedRating,
+                            feedback: feedbackController.text.trim().isEmpty ? null : feedbackController.text.trim(),
+                            isAnonymous: isAnonymous,
+                          );
+                        }
+                        
+                        Navigator.of(context).pop(true);
+                      } catch (e) {
+                        setState(() {
+                          isSubmitting = false;
+                        });
+                        
+                        // Show error message
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error ${isUpdate ? 'updating' : 'submitting'} rating: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: isSubmitting 
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(isUpdate ? 'Update Rating' : 'Submit Rating'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+        
+        if (result == true && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isUpdate ? 'Rating updated successfully!' : 'Rating submitted successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading rating data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildRatingDisplay(Map<String, dynamic> ratingData, double screenWidth) {
+    final averageRating = (ratingData['averageRating'] as num?)?.toDouble() ?? 0.0;
+    final totalRatings = ratingData['totalRatings'] as int? ?? 0;
+    
+    if (totalRatings == 0) {
+      return Text(
+        'No ratings yet',
+        style: TextStyle(
+          fontSize: screenWidth * 0.03,
+          color: Colors.grey[600],
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.star,
+          size: screenWidth * 0.035,
+          color: Colors.amber,
+        ),
+        SizedBox(width: screenWidth * 0.005),
+        Text(
+          '${averageRating.toStringAsFixed(1)}',
+          style: TextStyle(
+            fontSize: screenWidth * 0.03,
+            color: Colors.grey[700],
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(width: screenWidth * 0.01),
+        Text(
+          '($totalRatings)',
+          style: TextStyle(
+            fontSize: screenWidth * 0.028,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrainerNameDisplay(String? trainerId, String trainerName, Map<String, dynamic>? trainerRating, double screenWidth) {
+    final hasRatings = trainerRating != null && (trainerRating['totalRatings'] as int? ?? 0) > 0;
+    final isClickable = trainerId != null && hasRatings;
+
+    return GestureDetector(
+      onTap: isClickable ? () => _showTrainerRatingDetails(trainerId!, trainerName) : null,
+      child: Text(
+        'with $trainerName',
+        style: TextStyle(
+          fontSize: screenWidth * 0.04,
+          fontWeight: FontWeight.w500,
+          color: isClickable ? Colors.deepPurple : Colors.black87,
+          decoration: isClickable ? TextDecoration.underline : null,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTrainerRatingDetails(String trainerId, String trainerName) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Loading ratings...'),
+            ],
+          ),
+        ),
+      );
+
+      // Get both summary and detailed ratings
+      final ratingDetails = await _studentService.getTrainerRatingDetails(trainerId);
+      final ratingSummary = await _studentService.getTrainerRating(trainerId);
+      
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        _showRatingDetailsDialog(ratingDetails, ratingSummary, trainerName);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading rating details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showRatingDetailsDialog(List<Map<String, dynamic>> ratings, Map<String, dynamic>? ratingSummary, String trainerName) {
+    final averageRating = ratingSummary?['averageRating'] as double? ?? 0.0;
+    final totalRatings = ratingSummary?['totalRatings'] as int? ?? 0;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('$trainerName - Ratings'),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < averageRating.round() ? Icons.star : Icons.star_border,
+                      size: 20,
+                      color: Colors.amber,
+                    );
+                  }),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  totalRatings > 0 
+                      ? '${averageRating.toStringAsFixed(1)} ($totalRatings reviews)'
+                      : 'No reviews yet',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
+                ),
+              ],
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: totalRatings == 0
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.star_border,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'No ratings yet for this trainer.',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Be the first to rate them after taking a class!',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: ratings.length,
+                  itemBuilder: (context, index) {
+                    final rating = ratings[index];
+                    final isAnonymous = rating['isAnonymous'] as bool? ?? false;
+                    final studentName = isAnonymous ? 'Anonymous' : (rating['studentName'] as String? ?? 'Student');
+                    final ratingValue = rating['rating'] as int? ?? 0;
+                    final feedback = rating['feedback'] as String?;
+                    final createdAt = rating['createdAt'] as String?;
+                    
+                    DateTime? ratingDate;
+                    if (createdAt != null) {
+                      ratingDate = DateTime.tryParse(createdAt);
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    studentName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Row(
+                                  children: List.generate(5, (starIndex) {
+                                    return Icon(
+                                      starIndex < ratingValue ? Icons.star : Icons.star_border,
+                                      size: 16,
+                                      color: Colors.amber,
+                                    );
+                                  }),
+                                ),
+                              ],
+                            ),
+                            if (feedback != null && feedback.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                feedback,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ],
+                            if (ratingDate != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '${ratingDate.month}/${ratingDate.day}/${ratingDate.year}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
           ),
         ],
       ),
