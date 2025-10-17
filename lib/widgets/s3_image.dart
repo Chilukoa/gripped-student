@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../services/user_service.dart';
+import '../config/api_config.dart' as config;
 
 class S3Image extends StatefulWidget {
   final String? imageKey;
@@ -104,8 +105,8 @@ class _S3ImageState extends State<S3Image> {
     // Construct the full S3 path: profiles/{userId}/{imageId}.jpg
     final fullS3Key = 'profiles/$userId/$imageKey.jpg';
 
-    // Use the correct S3 bucket URL pattern
-    return 'https://grippedstack-userphotosbucket4d5de39b-gvc8qfaefzit.s3.us-east-1.amazonaws.com/$fullS3Key';
+    // Use the centralized S3 bucket URL from API config
+    return '${config.ApiConfig.s3BucketUrl}/$fullS3Key';
   }
 
   @override

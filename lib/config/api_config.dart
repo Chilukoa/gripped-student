@@ -42,6 +42,18 @@ class ApiConfig {
   static String get sendClassMessage =>
       '$baseUrl/classes'; // + /{sessionId}/messages
 
+  // Search endpoints
+  static String get searchClasses => '$baseUrl/classes/search';
+
+  // Rating endpoints
+  static String get getRatings => '$baseUrl/ratings';
+  static String get submitRating => '$baseUrl/ratings';
+  static String get updateRating => '$baseUrl/ratings'; // + /{trainerId}
+  static String get deleteRating => '$baseUrl/ratings'; // + /{trainerId}
+
+  // S3 bucket URL for profile images
+  static String get s3BucketUrl => 'https://grippedstack-userphotosbucket4d5de39b-gvc8qfaefzit.s3.us-east-1.amazonaws.com';
+
   // Authentication headers
   static Future<Map<String, String>> getAuthHeaders() async {
     try {

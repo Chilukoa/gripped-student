@@ -9,8 +9,6 @@ class StudentService {
   factory StudentService() => _instance;
   StudentService._internal();
 
-  static String get _baseUrl => config.ApiConfig.baseUrl;
-
   Future<String> _getAuthToken() async {
     try {
       final session = await Amplify.Auth.fetchAuthSession();
@@ -55,7 +53,7 @@ class StudentService {
         queryParams['date'] = date;
       }
       
-      final uri = Uri.parse('$_baseUrl/classes/search').replace(
+      final uri = Uri.parse(config.ApiConfig.searchClasses).replace(
         queryParameters: queryParams,
       );
 
@@ -108,7 +106,7 @@ class StudentService {
       }
       
       // Build URI with query parameters
-      final uri = Uri.parse('$_baseUrl/students/me/classes');
+      final uri = Uri.parse(config.ApiConfig.getStudentClasses);
       final uriWithQuery = uri.replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
       
       final response = await http.get(
@@ -137,10 +135,10 @@ class StudentService {
       final token = await _getAuthToken();
       
       safePrint('StudentService: Enrolling in session: $sessionId');
-      safePrint('StudentService: Enroll URL: $_baseUrl/classes/$sessionId/enroll');
+      safePrint('StudentService: Enroll URL: ${config.ApiConfig.enrollInClass}/$sessionId/enroll');
       
       final response = await http.post(
-        Uri.parse('$_baseUrl/classes/$sessionId/enroll'),
+        Uri.parse('${config.ApiConfig.enrollInClass}/$sessionId/enroll'),
         headers: _getAuthHeaders(token),
       );
 
@@ -163,7 +161,7 @@ class StudentService {
       final token = await _getAuthToken();
       
       final response = await http.delete(
-        Uri.parse('$_baseUrl/classes/$sessionId/enroll'),
+        Uri.parse('${config.ApiConfig.enrollInClass}/$sessionId/enroll'),
         headers: _getAuthHeaders(token),
       );
 
@@ -201,7 +199,7 @@ class StudentService {
       safePrint('StudentService: Rating data: $requestBody');
       
       final response = await http.post(
-        Uri.parse('$_baseUrl/ratings'),
+        Uri.parse(config.ApiConfig.submitRating),
         headers: _getAuthHeaders(token),
         body: json.encode(requestBody),
       );
@@ -241,7 +239,7 @@ class StudentService {
       safePrint('StudentService: Updated rating data: $requestBody');
       
       final response = await http.put(
-        Uri.parse('$_baseUrl/ratings/$trainerId'),
+        Uri.parse('${config.ApiConfig.updateRating}/$trainerId'),
         headers: _getAuthHeaders(token),
         body: json.encode(requestBody),
       );
@@ -267,7 +265,7 @@ class StudentService {
       final token = await _getAuthToken();
       
       final response = await http.get(
-        Uri.parse('$_baseUrl/ratings'),
+        Uri.parse(config.ApiConfig.getRatings),
         headers: _getAuthHeaders(token),
       );
 
@@ -301,7 +299,7 @@ class StudentService {
       final token = await _getAuthToken();
       
       final response = await http.get(
-        Uri.parse('$_baseUrl/ratings'),
+        Uri.parse(config.ApiConfig.getRatings),
         headers: _getAuthHeaders(token),
       );
 
@@ -327,7 +325,7 @@ class StudentService {
     try {
       final token = await _getAuthToken();
       
-      final uri = Uri.parse('$_baseUrl/ratings').replace(
+      final uri = Uri.parse(config.ApiConfig.getRatings).replace(
         queryParameters: {
           'trainerId': trainerId,
           'summary': 'true',
@@ -362,7 +360,7 @@ class StudentService {
     try {
       final token = await _getAuthToken();
       
-      final uri = Uri.parse('$_baseUrl/ratings').replace(
+      final uri = Uri.parse(config.ApiConfig.getRatings).replace(
         queryParameters: {
           'trainerId': trainerId,
         },
