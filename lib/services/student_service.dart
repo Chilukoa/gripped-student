@@ -39,6 +39,9 @@ class StudentService {
     try {
       final token = await _getAuthToken();
       
+      // Get user's timezone
+      final timezoneId = _getTimezoneId();
+      
       // Build query parameters
       final queryParams = <String, String>{
         'zipCode': zipCode,
@@ -51,6 +54,7 @@ class StudentService {
       
       if (date != null && date.isNotEmpty) {
         queryParams['date'] = date;
+        queryParams['timezone'] = timezoneId; // Add timezone parameter
       }
       
       final uri = Uri.parse(config.ApiConfig.searchClasses).replace(
@@ -389,6 +393,51 @@ class StudentService {
     } catch (e) {
       safePrint('StudentService: Error getting trainer rating details: $e');
       throw Exception('Failed to get trainer rating details: $e');
+    }
+  }
+
+  /// Get the user's IANA timezone identifier
+  String _getTimezoneId() {
+    try {
+      // Get the system timezone name
+      final now = DateTime.now();
+      final timeZoneOffset = now.timeZoneOffset;
+      
+      // Simple mapping for common US timezones
+      // In production, you might want to use a more comprehensive approach
+      // or a package like timezone or intl
+      
+      final offsetHours = timeZoneOffset.inHours;
+      final offsetMinutes = timeZoneOffset.inMinutes % 60;
+      
+      // Common US timezone mappings based on offset
+      if (offsetHours == -5 && offsetMinutes == 0) {
+        // Eastern Time
+        return now.month >= 3 && now.month <= 10 ? 'America/New_York' : 'America/New_York';
+      } else if (offsetHours == -6 && offsetMinutes == 0) {
+        // Central Time
+        return 'America/Chicago';
+      } else if (offsetHours == -7 && offsetMinutes == 0) {
+        // Mountain Time
+        return 'America/Denver';
+      } else if (offsetHours == -8 && offsetMinutes == 0) {
+        // Pacific Time
+        return 'America/Los_Angeles';
+      } else if (offsetHours == -9 && offsetMinutes == 0) {
+        // Alaska Time
+        return 'America/Anchorage';
+      } else if (offsetHours == -10 && offsetMinutes == 0) {
+        // Hawaii Time
+        return 'Pacific/Honolulu';
+      }
+      
+      // Default to UTC for unknown timezones
+      safePrint('StudentService: Unknown timezone offset $offsetHours:$offsetMinutes, defaulting to UTC');
+      return 'UTC';
+      
+    } catch (e) {
+      safePrint('StudentService: Error getting timezone: $e, defaulting to UTC');
+      return 'UTC';
     }
   }
 }
