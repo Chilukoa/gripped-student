@@ -399,36 +399,90 @@ class StudentService {
   /// Get the user's IANA timezone identifier
   String _getTimezoneId() {
     try {
-      // Get the system timezone name
+      // Try to get the system timezone name directly
       final now = DateTime.now();
+      final timeZoneName = now.timeZoneName;
       final timeZoneOffset = now.timeZoneOffset;
-      
-      // Simple mapping for common US timezones
-      // In production, you might want to use a more comprehensive approach
-      // or a package like timezone or intl
       
       final offsetHours = timeZoneOffset.inHours;
       final offsetMinutes = timeZoneOffset.inMinutes % 60;
       
-      // Common US timezone mappings based on offset
+      safePrint('StudentService: System timezone name: $timeZoneName');
+      safePrint('StudentService: Current timezone offset: $offsetHours hours, $offsetMinutes minutes');
+      
+      // First, try to map common timezone abbreviations to IANA identifiers
+      switch (timeZoneName.toUpperCase()) {
+        case 'EST':
+        case 'EDT':
+          return 'America/New_York';
+        case 'CST':
+        case 'CDT':
+          return 'America/Chicago';
+        case 'MST':
+        case 'MDT':
+          return 'America/Denver';
+        case 'PST':
+        case 'PDT':
+          return 'America/Los_Angeles';
+        case 'AKST':
+        case 'AKDT':
+          return 'America/Anchorage';
+        case 'HST':
+          return 'Pacific/Honolulu';
+      }
+      
+      // If timezone name doesn't match common abbreviations, fall back to offset mapping
+      // Note: DST is automatically handled by the IANA timezone identifiers
       if (offsetHours == -5 && offsetMinutes == 0) {
-        // Eastern Time
-        return now.month >= 3 && now.month <= 10 ? 'America/New_York' : 'America/New_York';
+        // Could be EST (winter) or CDT (summer)
+        // Let's use a heuristic: if it's between March and November, likely CDT
+        final month = now.month;
+        if (month >= 3 && month <= 11) {
+          safePrint('StudentService: -5 offset in $month, likely Central Daylight Time');
+          return 'America/Chicago';
+        } else {
+          safePrint('StudentService: -5 offset in $month, likely Eastern Standard Time');
+          return 'America/New_York';
+        }
       } else if (offsetHours == -6 && offsetMinutes == 0) {
-        // Central Time
-        return 'America/Chicago';
+        // Could be CST (winter) or MDT (summer)
+        final month = now.month;
+        if (month >= 3 && month <= 11) {
+          safePrint('StudentService: -6 offset in $month, likely Mountain Daylight Time');
+          return 'America/Denver';
+        } else {
+          safePrint('StudentService: -6 offset in $month, likely Central Standard Time');
+          return 'America/Chicago';
+        }
       } else if (offsetHours == -7 && offsetMinutes == 0) {
-        // Mountain Time
-        return 'America/Denver';
+        // Could be MST (winter) or PDT (summer)
+        final month = now.month;
+        if (month >= 3 && month <= 11) {
+          safePrint('StudentService: -7 offset in $month, likely Pacific Daylight Time');
+          return 'America/Los_Angeles';
+        } else {
+          safePrint('StudentService: -7 offset in $month, likely Mountain Standard Time');
+          return 'America/Denver';
+        }
       } else if (offsetHours == -8 && offsetMinutes == 0) {
-        // Pacific Time
-        return 'America/Los_Angeles';
+        // Could be PST (winter) or AKDT (summer)
+        final month = now.month;
+        if (month >= 3 && month <= 11) {
+          safePrint('StudentService: -8 offset in $month, likely Alaska Daylight Time');
+          return 'America/Anchorage';
+        } else {
+          safePrint('StudentService: -8 offset in $month, likely Pacific Standard Time');
+          return 'America/Los_Angeles';
+        }
       } else if (offsetHours == -9 && offsetMinutes == 0) {
-        // Alaska Time
+        // Alaska Standard Time (winter)
         return 'America/Anchorage';
       } else if (offsetHours == -10 && offsetMinutes == 0) {
-        // Hawaii Time
+        // Hawaii Time (no DST)
         return 'Pacific/Honolulu';
+      } else if (offsetHours == -4 && offsetMinutes == 0) {
+        // Eastern Daylight Time (summer)
+        return 'America/New_York';
       }
       
       // Default to UTC for unknown timezones
