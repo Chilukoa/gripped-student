@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import '../screens/login_screen.dart';
 import '../screens/profile_setup_screen.dart';
 import '../screens/student_dashboard_screen.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models/user_profile.dart' as models;
+import '../config/api_config.dart' as app_config;
 
 // App configuration - defines what role this app is designed for
 const String EXPECTED_USER_ROLE =
     'subscriber'; // This app is designed for subscribers only
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Stripe with key from ApiConfig
+  Stripe.publishableKey = app_config.ApiConfig.stripePublishableKey;
+  await Stripe.instance.applySettings();
+  
   runApp(const MyApp());
 }
 

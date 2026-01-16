@@ -4,8 +4,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../services/student_service.dart';
+import '../services/payment_service.dart';
 import 'login_screen.dart';
 import 'update_profile_screen.dart';
+import 'payment_method_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -18,6 +20,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final StudentService _studentService = StudentService();
+  final PaymentService _paymentService = PaymentService();
   
   // Search tab state
   final _zipCodeController = TextEditingController();
@@ -40,6 +43,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   DateTime? _enrolledToDate;
   bool _showCancelledClasses = false;
 
+  // Payment method state
+  bool _hasPaymentMethod = false;
+  bool _isCheckingPayment = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +54,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     
     // Set default filter to show future classes (today to today+90 days)
     _setEnrolledDateFilter('future');
+    
+    // Check payment method status
+    _checkPaymentMethod();
   }
 
   @override
@@ -267,6 +277,52 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   }
 
   Future<void> _enrollInClass(String sessionId) async {
+    // Check for payment method before enrollment
+    if (!_hasPaymentMethod) {
+      if (mounted) {
+        final shouldAddPayment = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Payment Method Required'),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('You need to add a payment method before booking classes.'),
+                SizedBox(height: 12),
+                Text(
+                  'Your card will only be charged when you attend a class.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Add Payment Method'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldAddPayment == true) {
+          _navigateToPaymentMethod();
+        }
+        return;
+      }
+    }
+
     try {
       safePrint('StudentDashboard: Attempting to enroll in session: $sessionId');
       
@@ -514,6 +570,41 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     _loadEnrolledClasses();
   }
 
+  Future<void> _checkPaymentMethod() async {
+    setState(() {
+      _isCheckingPayment = true;
+    });
+
+    try {
+      final hasPayment = await _paymentService.hasPaymentMethod();
+      if (mounted) {
+        setState(() {
+          _hasPaymentMethod = hasPayment;
+          _isCheckingPayment = false;
+        });
+      }
+    } catch (e) {
+      safePrint('StudentDashboard: Error checking payment method: $e');
+      if (mounted) {
+        setState(() {
+          _hasPaymentMethod = false;
+          _isCheckingPayment = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _navigateToPaymentMethod() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const PaymentMethodScreen(),
+      ),
+    );
+
+    // Refresh payment method status after returning
+    _checkPaymentMethod();
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -527,10 +618,24 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Payment method indicator
+          if (!_isCheckingPayment)
+            IconButton(
+              onPressed: _navigateToPaymentMethod,
+              icon: Icon(
+                _hasPaymentMethod ? Icons.credit_card : Icons.credit_card_off,
+                color: _hasPaymentMethod ? Colors.white : Colors.orange,
+              ),
+              tooltip: _hasPaymentMethod 
+                  ? 'Payment method on file' 
+                  : 'Add payment method',
+            ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'updateprofile') {
                 _updateProfile();
+              } else if (value == 'paymentmethod') {
+                _navigateToPaymentMethod();
               } else if (value == 'signout') {
                 _signOut();
               }
@@ -543,6 +648,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                     Icon(Icons.edit, color: Colors.blue),
                     SizedBox(width: 8),
                     Text('Update Profile'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'paymentmethod',
+                child: Row(
+                  children: [
+                    Icon(
+                      _hasPaymentMethod ? Icons.credit_card : Icons.credit_card_off,
+                      color: _hasPaymentMethod ? Colors.green : Colors.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_hasPaymentMethod 
+                        ? 'Update Payment Method' 
+                        : 'Add Payment Method'),
                   ],
                 ),
               ),
@@ -1935,6 +2055,56 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     safePrint('StudentDashboard: Showing booking confirmation for session: $sessionId');
     safePrint('StudentDashboard: Class details: ${classResult.toString()}');
     
+    // Check for payment method first
+    if (!_hasPaymentMethod) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Payment Method Required'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.credit_card_off,
+                size: 48,
+                color: Colors.orange,
+              ),
+              SizedBox(height: 16),
+              Text('You need to add a payment method before booking classes.'),
+              SizedBox(height: 12),
+              Text(
+                'Your card will only be charged when you attend a class.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _navigateToPaymentMethod();
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Payment Method'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1955,6 +2125,31 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               const SizedBox(height: 8),
               Text('Session ID: $sessionId', style: const TextStyle(fontSize: 12, color: Colors.grey)),
             ],
+            const SizedBox(height: 16),
+            // Payment method indicator
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Payment method on file',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             const Text('Would you like to book this class?'),
           ],
@@ -1983,301 +2178,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
               foregroundColor: Colors.white,
             ),
             child: const Text('Confirm Booking'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showContactOptions(Map<String, dynamic> classResult) {
-    final trainerEmail = classResult['trainerEmail'] as String?;
-    final trainerPhone = classResult['trainerPhone'] as String?;
-    final trainerName = classResult['trainerName'] ?? 'Trainer';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Contact $trainerName'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (trainerPhone != null && trainerPhone.isNotEmpty) ...[
-              ListTile(
-                leading: const Icon(Icons.phone, color: Colors.green),
-                title: Text(trainerPhone),
-                subtitle: const Text('Phone'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _makePhoneCall(trainerPhone);
-                },
-              ),
-            ],
-            if (trainerEmail != null && trainerEmail.isNotEmpty) ...[
-              ListTile(
-                leading: const Icon(Icons.email, color: Colors.blue),
-                title: Text(trainerEmail),
-                subtitle: const Text('Email'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _sendEmail(trainerEmail);
-                },
-              ),
-            ],
-            if ((trainerPhone == null || trainerPhone.isEmpty) && 
-                (trainerEmail == null || trainerEmail.isEmpty)) ...[
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'No contact information available for this trainer.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
-    try {
-      if (await canLaunchUrl(phoneUri)) {
-        await launchUrl(phoneUri);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Could not launch phone call to $phoneNumber'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error launching phone call: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _sendEmail(String email) async {
-    final Uri emailUri = Uri(
-      scheme: 'mailto',
-      path: email,
-      queryParameters: {
-        'subject': 'Inquiry about your fitness class',
-        'body': 'Hi! I found your class on the Gripped app and would like to know more.',
-      },
-    );
-    try {
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Could not launch email to $email'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error launching email: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildQuickFilterChip(String label, String filterType, double screenWidth) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    
-    bool isActive = false;
-    switch (filterType) {
-      case 'future':
-        isActive = _enrolledFromDate?.isAtSameMomentAs(today) == true &&
-                   _enrolledToDate?.isAtSameMomentAs(today.add(const Duration(days: 90))) == true;
-        break;
-      case 'all':
-        isActive = _enrolledFromDate == null && _enrolledToDate == null;
-        break;
-      case 'today':
-        isActive = _enrolledFromDate?.isAtSameMomentAs(today) == true &&
-                   _enrolledToDate?.isAtSameMomentAs(today) == true;
-        break;
-      case 'this_week':
-        final weekStart = today.subtract(Duration(days: today.weekday - 1));
-        final weekEnd = weekStart.add(const Duration(days: 6));
-        isActive = _enrolledFromDate?.isAtSameMomentAs(weekStart) == true &&
-                   _enrolledToDate?.isAtSameMomentAs(weekEnd) == true;
-        break;
-      case 'this_month':
-        final monthStart = DateTime(today.year, today.month, 1);
-        final monthEnd = DateTime(today.year, today.month + 1, 0);
-        isActive = _enrolledFromDate?.isAtSameMomentAs(monthStart) == true &&
-                   _enrolledToDate?.isAtSameMomentAs(monthEnd) == true;
-        break;
-      case 'past':
-        final yesterday = today.subtract(const Duration(days: 1));
-        isActive = _enrolledFromDate?.year == 2020 &&
-                   _enrolledToDate?.isAtSameMomentAs(yesterday) == true;
-        break;
-    }
-
-    return FilterChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: screenWidth * 0.032,
-          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      selected: isActive,
-      onSelected: (selected) => _setEnrolledDateFilter(filterType),
-      selectedColor: Colors.deepPurple.withOpacity(0.2),
-      checkmarkColor: Colors.deepPurple,
-      backgroundColor: Colors.grey[200],
-      elevation: isActive ? 2 : 0,
-    );
-  }
-
-  String _getFilterDisplayText() {
-    if (_enrolledFromDate == null && _enrolledToDate == null) {
-      return 'All classes';
-    } else if (_enrolledFromDate != null && _enrolledToDate != null) {
-      final fromStr = "${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}";
-      final toStr = "${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}";
-      return 'From $fromStr to $toStr';
-    } else if (_enrolledFromDate != null) {
-      final fromStr = "${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}";
-      return 'From $fromStr';
-    } else {
-      final toStr = "${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}";
-      return 'Until $toStr';
-    }
-  }
-
-  void _showEnrolledDateFilterDialog(double screenWidth, double screenHeight) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Filter Classes by Date'),
-        content: SizedBox(
-          width: screenWidth * 0.8,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // From Date
-              ListTile(
-                leading: const Icon(Icons.date_range),
-                title: Text(_enrolledFromDate != null 
-                    ? 'From: ${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}'
-                    : 'From: No start date'),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _enrolledFromDate ?? DateTime.now(),
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _enrolledFromDate = picked;
-                    });
-                  }
-                },
-              ),
-              
-              // To Date
-              ListTile(
-                leading: const Icon(Icons.date_range),
-                title: Text(_enrolledToDate != null 
-                    ? 'To: ${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}'
-                    : 'To: No end date'),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _enrolledToDate ?? DateTime.now().add(const Duration(days: 90)),
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _enrolledToDate = picked;
-                    });
-                  }
-                },
-              ),
-              
-              SizedBox(height: screenHeight * 0.02),
-              
-              // Quick preset buttons
-              Wrap(
-                spacing: 8,
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _setEnrolledDateFilter('future');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Future Classes'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _setEnrolledDateFilter('all');
-                    },
-                    child: const Text('All Classes'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _clearEnrolledDateFilters();
-            },
-            child: const Text('Clear Filters'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _loadEnrolledClasses();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Apply'),
           ),
         ],
       ),
@@ -2782,6 +2682,295 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContactOptions(Map<String, dynamic> classResult) {
+    final trainerEmail = classResult['trainerEmail'] as String?;
+    final trainerPhone = classResult['trainerPhone'] as String?;
+    final trainerName = classResult['trainerName'] ?? 'Trainer';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Contact $trainerName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (trainerPhone != null && trainerPhone.isNotEmpty) ...[
+              ListTile(
+                leading: const Icon(Icons.phone, color: Colors.green),
+                title: Text(trainerPhone),
+                subtitle: const Text('Phone'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _makePhoneCall(trainerPhone);
+                },
+              ),
+            ],
+            if (trainerEmail != null && trainerEmail.isNotEmpty) ...[
+              ListTile(
+                leading: const Icon(Icons.email, color: Colors.blue),
+                title: Text(trainerEmail),
+                subtitle: const Text('Email'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _sendEmail(trainerEmail);
+                },
+              ),
+            ],
+            if ((trainerPhone == null || trainerPhone.isEmpty) && 
+                (trainerEmail == null || trainerEmail.isEmpty)) ...[
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'No contact information available for this trainer.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not launch phone call to $phoneNumber'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error launching phone call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendEmail(String email) async {
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: {
+        'subject': 'Inquiry about your fitness class',
+        'body': 'Hi! I found your class on the Gripped app and would like to know more.',
+      },
+    );
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not launch email to $email'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error launching email: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildQuickFilterChip(String label, String filterType, double screenWidth) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    bool isActive = false;
+    switch (filterType) {
+      case 'future':
+        isActive = _enrolledFromDate?.isAtSameMomentAs(today) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(today.add(const Duration(days: 90))) == true;
+        break;
+      case 'all':
+        isActive = _enrolledFromDate == null && _enrolledToDate == null;
+        break;
+      case 'today':
+        isActive = _enrolledFromDate?.isAtSameMomentAs(today) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(today) == true;
+        break;
+      case 'this_week':
+        final weekStart = today.subtract(Duration(days: today.weekday - 1));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        isActive = _enrolledFromDate?.isAtSameMomentAs(weekStart) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(weekEnd) == true;
+        break;
+      case 'this_month':
+        final monthStart = DateTime(today.year, today.month, 1);
+        final monthEnd = DateTime(today.year, today.month + 1, 0);
+        isActive = _enrolledFromDate?.isAtSameMomentAs(monthStart) == true &&
+                   _enrolledToDate?.isAtSameMomentAs(monthEnd) == true;
+        break;
+      case 'past':
+        final yesterday = today.subtract(const Duration(days: 1));
+        isActive = _enrolledFromDate?.year == 2020 &&
+                   _enrolledToDate?.isAtSameMomentAs(yesterday) == true;
+        break;
+    }
+
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: screenWidth * 0.032,
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isActive,
+      onSelected: (selected) => _setEnrolledDateFilter(filterType),
+      selectedColor: Colors.deepPurple.withOpacity(0.2),
+      checkmarkColor: Colors.deepPurple,
+      backgroundColor: Colors.grey[200],
+      elevation: isActive ? 2 : 0,
+    );
+  }
+
+  String _getFilterDisplayText() {
+    if (_enrolledFromDate == null && _enrolledToDate == null) {
+      return 'All classes';
+    } else if (_enrolledFromDate != null && _enrolledToDate != null) {
+      final fromStr = "${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}";
+      final toStr = "${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}";
+      return 'From $fromStr to $toStr';
+    } else if (_enrolledFromDate != null) {
+      final fromStr = "${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}";
+      return 'From $fromStr';
+    } else {
+      final toStr = "${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}";
+      return 'Until $toStr';
+    }
+  }
+
+  void _showEnrolledDateFilterDialog(double screenWidth, double screenHeight) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Filter Classes by Date'),
+        content: SizedBox(
+          width: screenWidth * 0.8,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.date_range),
+                title: Text(_enrolledFromDate != null 
+                    ? 'From: ${_enrolledFromDate!.month}/${_enrolledFromDate!.day}/${_enrolledFromDate!.year}'
+                    : 'From: No start date'),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _enrolledFromDate ?? DateTime.now(),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _enrolledFromDate = picked;
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.date_range),
+                title: Text(_enrolledToDate != null 
+                    ? 'To: ${_enrolledToDate!.month}/${_enrolledToDate!.day}/${_enrolledToDate!.year}'
+                    : 'To: No end date'),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _enrolledToDate ?? DateTime.now().add(const Duration(days: 90)),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _enrolledToDate = picked;
+                    });
+                  }
+                },
+              ),
+              SizedBox(height: screenHeight * 0.02),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _setEnrolledDateFilter('future');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Future Classes'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _setEnrolledDateFilter('all');
+                    },
+                    child: const Text('All Classes'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _clearEnrolledDateFilters();
+            },
+            child: const Text('Clear Filters'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _loadEnrolledClasses();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Apply'),
           ),
         ],
       ),

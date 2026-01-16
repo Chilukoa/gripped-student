@@ -9,6 +9,10 @@ class ApiConfig {
       'https://5957u6zvu3.execute-api.us-east-1.amazonaws.com/prod';
   static const String _devBaseUrl = 'https://dev-api.grippedapp.com';
 
+  // Stripe publishable key
+  static const String stripePublishableKey =
+      'pk_test_51SGlhA37CiRnvWXT4OXsu5Eb5eP0eGP6vGWjO2hnJDWSCx0gGiB6LlRVwVlyVedRsVmqihjmdMAylYeXEQSSlmsz00Vo4YYh9J';
+
   // Environment flag - change this for different builds
   static const Environment _environment =
       Environment.production; // Change to prod for production
