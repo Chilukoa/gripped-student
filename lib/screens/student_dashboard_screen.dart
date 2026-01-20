@@ -277,8 +277,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   }
 
   Future<void> _enrollInClass(String sessionId) async {
+    // Always check payment method freshly from backend (DynamoDB) before enrollment
+    final hasPayment = await _paymentService.hasPaymentMethod();
+    
+    // Update cached state
+    if (mounted) {
+      setState(() {
+        _hasPaymentMethod = hasPayment;
+      });
+    }
+
     // Check for payment method before enrollment
-    if (!_hasPaymentMethod) {
+    if (!hasPayment) {
       if (mounted) {
         final shouldAddPayment = await showDialog<bool>(
           context: context,
@@ -2050,13 +2060,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     );
   }
 
-  void _showBookingConfirmation(Map<String, dynamic> classResult) {
+  Future<void> _showBookingConfirmation(Map<String, dynamic> classResult) async {
     final sessionId = classResult['sessionId'] as String?;
     safePrint('StudentDashboard: Showing booking confirmation for session: $sessionId');
     safePrint('StudentDashboard: Class details: ${classResult.toString()}');
     
-    // Check for payment method first
-    if (!_hasPaymentMethod) {
+    // Check for payment method freshly from backend (DynamoDB)
+    final hasPayment = await _paymentService.hasPaymentMethod();
+    
+    // Update cached state
+    if (mounted) {
+      setState(() {
+        _hasPaymentMethod = hasPayment;
+      });
+    }
+    
+    if (!hasPayment) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -2105,6 +2125,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
       return;
     }
     
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

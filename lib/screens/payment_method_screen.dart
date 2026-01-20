@@ -43,7 +43,8 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
     });
 
     try {
-      final result = await _paymentService.getPaymentMethod();
+      // Force refresh to get the latest payment method status
+      final result = await _paymentService.getPaymentMethod(forceRefresh: true);
       
       if (mounted) {
         setState(() {
