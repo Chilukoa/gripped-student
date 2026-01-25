@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/user_profile.dart';
@@ -33,9 +35,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   // Dropdown values
   String _selectedGender = 'Male';
 
-  // Images
-  File? _profileImage;
-  File? _idImage;
+  // Images - store both XFile and bytes for web compatibility
+  XFile? _profileImageFile;
+  XFile? _idImageFile;
+  Uint8List? _profileImageBytes;
+  Uint8List? _idImageBytes;
 
   final ImagePicker _picker = ImagePicker();
   final List<String> _genderOptions = [
@@ -86,11 +90,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       );
 
       if (image != null) {
+        final bytes = await image.readAsBytes();
         setState(() {
           if (type == 'profile') {
-            _profileImage = File(image.path);
+            _profileImageFile = image;
+            _profileImageBytes = bytes;
           } else {
-            _idImage = File(image.path);
+            _idImageFile = image;
+            _idImageBytes = bytes;
           }
         });
       }
@@ -111,7 +118,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
-    if (_profileImage == null) {
+    if (_profileImageFile == null || _profileImageBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a profile image'),
@@ -121,7 +128,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
-    if (_idImage == null) {
+    if (_idImageFile == null || _idImageBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select an ID image'),
@@ -136,11 +143,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     });
 
     try {
-      // Upload images first
-      final profileImageKey = await UserService().uploadSingleImage(
-        _profileImage!,
+      // Upload images first - use bytes for web compatibility
+      final profileImageKey = await UserService().uploadSingleImageFromBytes(
+        _profileImageBytes!,
+        _profileImageFile!.name,
       );
-      final idImageKey = await UserService().uploadSingleImage(_idImage!);
+      final idImageKey = await UserService().uploadSingleImageFromBytes(
+        _idImageBytes!,
+        _idImageFile!.name,
+      );
 
       if (profileImageKey == null || idImageKey == null) {
         throw Exception('Failed to upload images');
@@ -223,8 +234,20 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    final actualWidth = MediaQuery.of(context).size.width;
+    final actualHeight = MediaQuery.of(context).size.height;
+    
+    // For responsive design: cap the effective width for calculations
+    // This prevents UI from becoming huge on desktop
+    final isDesktop = actualWidth >= 800;
+    final isTablet = actualWidth >= 600 && actualWidth < 800;
+    
+    // Use capped width for sizing calculations
+    final screenWidth = isDesktop ? 500.0 : (isTablet ? 450.0 : actualWidth);
+    final screenHeight = actualHeight;
+    
+    // Content max width for desktop layout
+    final contentMaxWidth = isDesktop ? 800.0 : double.infinity;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -256,10 +279,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         key: _formKey,
         child: SingleChildScrollView(
           controller: _scrollController,
-          padding: EdgeInsets.all(screenWidth * 0.04),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          padding: EdgeInsets.symmetric(
+            horizontal: isDesktop ? 40 : screenWidth * 0.04,
+            vertical: screenWidth * 0.04,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: contentMaxWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Profile Setup Header
               Container(
                 padding: EdgeInsets.all(screenWidth * 0.04),
@@ -469,14 +498,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 [
                   _buildImagePicker(
                     'Profile Photo *',
-                    _profileImage,
+                    _profileImageBytes,
                     () => _pickImage('profile'),
                     screenWidth,
                   ),
                   SizedBox(height: screenHeight * 0.02),
                   _buildImagePicker(
                     'ID Image *',
-                    _idImage,
+                    _idImageBytes,
                     () => _pickImage('id'),
                     screenWidth,
                   ),
@@ -522,6 +551,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
               SizedBox(height: screenHeight * 0.02),
             ],
+              ),
+            ),
           ),
         ),
       ),
@@ -620,7 +651,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   Widget _buildImagePicker(
     String label,
-    File? image,
+    Uint8List? imageBytes,
     VoidCallback onTap,
     double screenWidth,
   ) {
@@ -646,10 +677,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               borderRadius: BorderRadius.circular(8),
               color: Colors.grey[50],
             ),
-            child: image != null
+            child: imageBytes != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(image, fit: BoxFit.cover),
+                    child: Image.memory(imageBytes, fit: BoxFit.cover),
                   )
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,

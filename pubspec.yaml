@@ -51,8 +51,9 @@ dependencies:
   # For launching URLs (phone, email, etc.)
   url_launcher: ^6.2.1
 
-  # For Stripe payments
-  flutter_stripe: ^10.1.1
+  # For Stripe payments (use compatible versions for web)
+  flutter_stripe: ^11.0.0
+  flutter_stripe_web: ^6.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:amplify_flutter/amplify_flutter.dart' hide UserProfile;
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
@@ -125,6 +126,47 @@ class UserService {
       return imageKeys.isNotEmpty ? imageKeys.first : null;
     } catch (e) {
       safePrint('Error uploading single image: $e');
+      rethrow;
+    }
+  }
+
+  /// Upload image from bytes (web-compatible)
+  Future<String?> uploadSingleImageFromBytes(Uint8List imageBytes, String fileName) async {
+    try {
+      // Get presigned URL for single image
+      final presignedUrls = await _getPresignedUrls(1);
+      if (presignedUrls == null || presignedUrls.isEmpty) {
+        throw Exception('Failed to get presigned URL for image');
+      }
+
+      final presignedUrl = presignedUrls.first;
+      safePrint('Uploading image from bytes to S3...');
+      safePrint('Upload URL: ${presignedUrl['uploadUrl']}');
+      safePrint('Image ID: ${presignedUrl['imageId']}');
+      safePrint('Image size: ${imageBytes.length} bytes');
+
+      final response = await http.put(
+        Uri.parse(presignedUrl['uploadUrl']),
+        headers: {'Content-Type': 'image/jpeg'},
+        body: imageBytes,
+      );
+
+      safePrint('S3 upload response: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        safePrint('S3 upload response body: ${response.body}');
+      }
+
+      if (response.statusCode == 200) {
+        final imageId = presignedUrl['imageId'];
+        safePrint('Successfully uploaded image with ID: $imageId');
+        return imageId;
+      } else {
+        throw Exception(
+          'Failed to upload to S3: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      safePrint('Error uploading image from bytes: $e');
       rethrow;
     }
   }

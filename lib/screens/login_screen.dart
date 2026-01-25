@@ -76,16 +76,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final actualWidth = MediaQuery.of(context).size.width;
+    final isDesktop = actualWidth >= 800;
+    final isTablet = actualWidth >= 600 && actualWidth < 800;
+    final contentMaxWidth = isDesktop ? 450.0 : (isTablet ? 400.0 : double.infinity);
+    
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: contentMaxWidth),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 const SizedBox(height: 60),
                 // Logo or App Name
                 const Icon(
@@ -248,6 +256,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
             ),
+          ),
+        ),
           ),
         ),
       ),

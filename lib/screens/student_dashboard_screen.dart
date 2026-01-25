@@ -617,8 +617,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    final actualWidth = MediaQuery.of(context).size.width;
+    final actualHeight = MediaQuery.of(context).size.height;
+    
+    // For responsive design: cap the effective width for calculations
+    final isDesktop = actualWidth >= 800;
+    final isTablet = actualWidth >= 600 && actualWidth < 800;
+    
+    // Use capped width for sizing calculations
+    final screenWidth = isDesktop ? 500.0 : (isTablet ? 450.0 : actualWidth);
+    final screenHeight = actualHeight;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -1333,7 +1341,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                           ),
                         ),
                         SizedBox(height: screenHeight * 0.003),
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Icon(
                               Icons.sort,

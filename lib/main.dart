@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_stripe/flutter_stripe.dart';
 import '../screens/login_screen.dart';
 import '../screens/profile_setup_screen.dart';
@@ -9,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models/user_profile.dart' as models;
 import '../config/api_config.dart' as app_config;
+import '../widgets/web_wrapper.dart';
 
 // App configuration - defines what role this app is designed for
 const String EXPECTED_USER_ROLE =
@@ -17,7 +19,7 @@ const String EXPECTED_USER_ROLE =
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Stripe with key from ApiConfig
+  // Initialize Stripe for all platforms (flutter_stripe_web handles web)
   Stripe.publishableKey = app_config.ApiConfig.stripePublishableKey;
   await Stripe.instance.applySettings();
   
@@ -74,11 +76,13 @@ class _MyAppState extends State<MyApp> {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: _error != null
-          ? ErrorScreen(error: _error!)
-          : _isAmplifyConfigured
-          ? const AuthWrapper()
-          : const SplashScreen(),
+      home: WebWrapper(
+        child: _error != null
+            ? ErrorScreen(error: _error!)
+            : _isAmplifyConfigured
+            ? const AuthWrapper()
+            : const SplashScreen(),
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

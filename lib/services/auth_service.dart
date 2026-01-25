@@ -2,6 +2,7 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_secure_storage/amplify_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../amplifyconfiguration.dart';
 
 class AuthService {
@@ -22,12 +23,18 @@ class AuthService {
         return;
       }
 
-      // Add the Auth plugin with secure storage configuration
-      await Amplify.addPlugin(
-        AmplifyAuthCognito(
-          secureStorageFactory: AmplifySecureStorage.factoryFrom(),
-        ),
-      );
+      // Add the Auth plugin - use default storage on web, custom on mobile
+      if (kIsWeb) {
+        // On web, use default storage (localStorage)
+        await Amplify.addPlugin(AmplifyAuthCognito());
+      } else {
+        // On mobile, use secure storage
+        await Amplify.addPlugin(
+          AmplifyAuthCognito(
+            secureStorageFactory: AmplifySecureStorage.factoryFrom(),
+          ),
+        );
+      }
 
       // Configure Amplify with the configuration
       await Amplify.configure(amplifyconfig);

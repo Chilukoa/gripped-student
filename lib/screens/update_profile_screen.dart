@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:amplify_flutter/amplify_flutter.dart' hide UserProfile;
 import '../models/user_profile.dart';
 import '../services/user_service.dart';
@@ -43,9 +44,11 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
   bool _isLoading = false;
 
-  // Image handling
-  File? _profileImage;
-  File? _idImage;
+  // Image handling - store both XFile and bytes for web compatibility
+  XFile? _profileImageFile;
+  XFile? _idImageFile;
+  Uint8List? _profileImageBytes;
+  Uint8List? _idImageBytes;
 
   @override
   void initState() {
@@ -94,11 +97,14 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(source: ImageSource.gallery);
       if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
         setState(() {
           if (type == 'profile') {
-            _profileImage = File(pickedFile.path);
+            _profileImageFile = pickedFile;
+            _profileImageBytes = bytes;
           } else if (type == 'id') {
-            _idImage = File(pickedFile.path);
+            _idImageFile = pickedFile;
+            _idImageBytes = bytes;
           }
         });
       }
@@ -181,31 +187,37 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
       String? profileImageUrl = widget.currentProfile.profileImage;
       String? idImageUrl = widget.currentProfile.idImage;
 
-      // Handle image uploads if new images were selected
-      List<File> imagesToUpload = [];
-      if (_profileImage != null) {
-        imagesToUpload.add(_profileImage!);
-      }
-      if (_idImage != null) {
-        imagesToUpload.add(_idImage!);
-      }
-
-      if (imagesToUpload.isNotEmpty) {
+      // Handle image uploads if new images were selected (using bytes for web compatibility)
+      if (_profileImageBytes != null && _profileImageFile != null) {
         try {
-          final imageUrls = await UserService().uploadImages(imagesToUpload);
-          int urlIndex = 0;
-
-          if (_profileImage != null) {
-            profileImageUrl = imageUrls[urlIndex++];
-          }
-          if (_idImage != null) {
-            idImageUrl = imageUrls[urlIndex++];
-          }
+          profileImageUrl = await UserService().uploadSingleImageFromBytes(
+            _profileImageBytes!,
+            _profileImageFile!.name,
+          );
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to upload images: $e'),
+                content: Text('Failed to upload profile image: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      if (_idImageBytes != null && _idImageFile != null) {
+        try {
+          idImageUrl = await UserService().uploadSingleImageFromBytes(
+            _idImageBytes!,
+            _idImageFile!.name,
+          );
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to upload ID image: $e'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -316,8 +328,14 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    final actualWidth = MediaQuery.of(context).size.width;
+    final actualHeight = MediaQuery.of(context).size.height;
+    final isDesktop = actualWidth >= 800;
+    final isTablet = actualWidth >= 600 && actualWidth < 800;
+    // Cap the screenWidth for sizing calculations (prevents giant fonts on desktop)
+    final screenWidth = isDesktop ? 500.0 : (isTablet ? 450.0 : actualWidth);
+    final screenHeight = actualHeight;
+    final contentMaxWidth = isDesktop ? 600.0 : (isTablet ? 500.0 : double.infinity);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -345,13 +363,16 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(screenWidth * 0.04),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: contentMaxWidth),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(screenWidth * 0.04),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Personal Information Card
               Card(
                 elevation: 2,
@@ -567,11 +588,11 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                                       border: Border.all(color: Colors.grey),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: _profileImage != null
+                                    child: _profileImageBytes != null
                                         ? ClipRRect(
                                             borderRadius: BorderRadius.circular(8),
-                                            child: Image.file(
-                                              _profileImage!,
+                                            child: Image.memory(
+                                              _profileImageBytes!,
                                               fit: BoxFit.cover,
                                             ),
                                           )
@@ -597,13 +618,14 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                                           ),
                                         ),
                                       ),
-                                      if (_profileImage != null) ...[
+                                      if (_profileImageBytes != null) ...[
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: ElevatedButton.icon(
                                             onPressed: () {
                                               setState(() {
-                                                _profileImage = null;
+                                                _profileImageFile = null;
+                                                _profileImageBytes = null;
                                               });
                                             },
                                             icon: const Icon(Icons.clear, size: 16),
@@ -715,11 +737,11 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                                       border: Border.all(color: Colors.grey),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: _idImage != null
+                                    child: _idImageBytes != null
                                         ? ClipRRect(
                                             borderRadius: BorderRadius.circular(8),
-                                            child: Image.file(
-                                              _idImage!,
+                                            child: Image.memory(
+                                              _idImageBytes!,
                                               fit: BoxFit.cover,
                                             ),
                                           )
@@ -745,13 +767,14 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                                           ),
                                         ),
                                       ),
-                                      if (_idImage != null) ...[
+                                      if (_idImageBytes != null) ...[
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: ElevatedButton.icon(
                                             onPressed: () {
                                               setState(() {
-                                                _idImage = null;
+                                                _idImageFile = null;
+                                                _idImageBytes = null;
                                               });
                                             },
                                             icon: const Icon(Icons.clear, size: 16),
@@ -936,6 +959,8 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
               SizedBox(height: screenHeight * 0.02),
             ],
           ),
+        ),
+      ),
         ),
       ),
     );
