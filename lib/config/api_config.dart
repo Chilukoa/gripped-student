@@ -3,28 +3,60 @@ import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 
 class ApiConfig {
   // Base URLs for different environments
-  static const String _prodBaseUrl =
+  // nonProd = dev/beta AWS account (841162691071)
+  // prod = production AWS account (371457438483)
+  static const String _nonProdBaseUrl =
       'https://xsmi514ucd.execute-api.us-east-1.amazonaws.com/prod';
-  static const String _testBaseUrl =
+  static const String _prodBaseUrl =
+      'https://3q2dju8479.execute-api.us-east-1.amazonaws.com/prod';
+  static const String _betaBaseUrl =
       'https://5957u6zvu3.execute-api.us-east-1.amazonaws.com/prod';
-  static const String _devBaseUrl = 'https://dev-api.grippedapp.com';
 
-  // Stripe publishable key
-  static const String stripePublishableKey =
+  // Stripe publishable keys per environment
+  static const String _nonProdStripeKey =
       'pk_test_51SGlhA37CiRnvWXT4OXsu5Eb5eP0eGP6vGWjO2hnJDWSCx0gGiB6LlRVwVlyVedRsVmqihjmdMAylYeXEQSSlmsz00Vo4YYh9J';
+  static const String _prodStripeKey =
+      'pk_live_51SsWEW2NzmiT6SLdA2BsnjSuC3vJceoLJQinNW4UWxC50fchfdhkNw4pi2Z8o2I8i1ADk5fDC7zJCehjBIL7idvJ00HhKgng5C';
+
+  // S3 bucket URLs per environment
+  static const String _nonProdS3BucketUrl =
+      'https://grippedstack-userphotosbucket4d5de39b-gvc8qfaefzit.s3.us-east-1.amazonaws.com';
+  static const String _prodS3BucketUrl =
+      'https://grippedstack-userphotosbucket4d5de39b-gvc8qfaefzit.s3.us-east-1.amazonaws.com'; // Update with prod bucket when available
 
   // Environment flag - change this for different builds
+  // nonProd = development/testing, prod = real production
   static const Environment _environment =
-      Environment.production; // Change to prod for production
+      Environment.nonProd; // Change to Environment.prod for production deployment
 
   static String get baseUrl {
     switch (_environment) {
-      case Environment.production:
+      case Environment.prod:
         return _prodBaseUrl;
-      case Environment.test:
-        return _testBaseUrl;
-      case Environment.development:
-        return _devBaseUrl;
+      case Environment.nonProd:
+        return _nonProdBaseUrl;
+      case Environment.beta:
+        return _betaBaseUrl;
+    }
+  }
+
+  static String get stripePublishableKey {
+    switch (_environment) {
+      case Environment.prod:
+        return _prodStripeKey;
+      case Environment.nonProd:
+      case Environment.beta:
+        return _nonProdStripeKey;
+    }
+  }
+
+  static String get s3BucketUrl {
+    switch (_environment) {
+      case Environment.prod:
+        return _prodS3BucketUrl;
+      case Environment.nonProd:
+      case Environment.beta:
+        return _nonProdS3BucketUrl;
     }
   }
 
@@ -55,8 +87,8 @@ class ApiConfig {
   static String get updateRating => '$baseUrl/ratings'; // + /{trainerId}
   static String get deleteRating => '$baseUrl/ratings'; // + /{trainerId}
 
-  // S3 bucket URL for profile images
-  static String get s3BucketUrl => 'https://grippedstack-userphotosbucket4d5de39b-gvc8qfaefzit.s3.us-east-1.amazonaws.com';
+  // S3 bucket URL for profile images (environment-aware)
+  // Use s3BucketUrl getter above instead of this hardcoded value
 
   // Authentication headers
   static Future<Map<String, String>> getAuthHeaders() async {
@@ -77,4 +109,4 @@ class ApiConfig {
   }
 }
 
-enum Environment { production, test, development }
+enum Environment { prod, nonProd, beta }
