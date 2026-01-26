@@ -230,6 +230,10 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
+    
+    // Cap the effective width for responsive design - prevents oversized elements on desktop
+    final effectiveWidth = screenWidth > 600 ? 600.0 : screenWidth;
+    final effectiveHeight = screenHeight > 900 ? 900.0 : screenHeight;
 
     return Scaffold(
       appBar: AppBar(
@@ -239,22 +243,27 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple)))
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(screenWidth * 0.04),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Manage Payment Method', style: TextStyle(fontSize: screenWidth * 0.06, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
-                  SizedBox(height: screenHeight * 0.01),
-                  Text('Add or update your payment method to book fitness classes.', style: TextStyle(fontSize: screenWidth * 0.04, color: Colors.grey[600])),
-                  SizedBox(height: screenHeight * 0.03),
-                  if (!_showCardInput) _buildCurrentPaymentCard(screenWidth, screenHeight),
-                  if (_showCardInput) _buildCardInputSection(screenWidth, screenHeight),
-                  SizedBox(height: screenHeight * 0.03),
-                  if (!_showCardInput) _buildActionButtons(screenWidth, screenHeight),
-                  SizedBox(height: screenHeight * 0.04),
-                  _buildSecurityInfo(screenWidth, screenHeight),
-                ],
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(effectiveWidth * 0.04),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Manage Payment Method', style: TextStyle(fontSize: effectiveWidth * 0.05, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                      SizedBox(height: effectiveHeight * 0.01),
+                      Text('Add or update your payment method to book fitness classes.', style: TextStyle(fontSize: effectiveWidth * 0.035, color: Colors.grey[600])),
+                      SizedBox(height: effectiveHeight * 0.03),
+                      if (!_showCardInput) _buildCurrentPaymentCard(effectiveWidth, effectiveHeight),
+                      if (_showCardInput) _buildCardInputSection(effectiveWidth, effectiveHeight),
+                      SizedBox(height: effectiveHeight * 0.03),
+                      if (!_showCardInput) _buildActionButtons(effectiveWidth, effectiveHeight),
+                      SizedBox(height: effectiveHeight * 0.04),
+                      _buildSecurityInfo(effectiveWidth, effectiveHeight),
+                    ],
+                  ),
+                ),
               ),
             ),
     );
