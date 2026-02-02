@@ -851,9 +851,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                           if (value?.trim().isEmpty ?? true) {
                             return 'Please enter your bio';
                           }
-                          if (value!.trim().length < 50) {
-                            return 'Bio should be at least 50 characters';
-                          }
                           return null;
                         },
                       ),

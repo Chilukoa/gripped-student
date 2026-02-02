@@ -1364,6 +1364,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                     ),
                   ),
                   IconButton(
+                    onPressed: _loadEnrolledClasses,
+                    icon: Icon(
+                      Icons.refresh,
+                      color: Colors.deepPurple,
+                    ),
+                    tooltip: 'Refresh classes',
+                  ),
+                  IconButton(
                     onPressed: () => _showEnrolledDateFilterDialog(screenWidth, screenHeight),
                     icon: Icon(
                       Icons.filter_list,
@@ -1581,6 +1589,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                       ],
                     ],
                   ),
+                ),
+                IconButton(
+                  onPressed: _loadEnrolledClasses,
+                  icon: Icon(
+                    Icons.refresh,
+                    color: Colors.deepPurple,
+                  ),
+                  tooltip: 'Refresh classes',
                 ),
                 IconButton(
                   onPressed: () => _showEnrolledDateFilterDialog(screenWidth, screenHeight),

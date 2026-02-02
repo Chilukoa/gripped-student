@@ -37,9 +37,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   // Images - store both XFile and bytes for web compatibility
   XFile? _profileImageFile;
-  XFile? _idImageFile;
   Uint8List? _profileImageBytes;
-  Uint8List? _idImageBytes;
 
   final ImagePicker _picker = ImagePicker();
   final List<String> _genderOptions = [
@@ -95,9 +93,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           if (type == 'profile') {
             _profileImageFile = image;
             _profileImageBytes = bytes;
-          } else {
-            _idImageFile = image;
-            _idImageBytes = bytes;
           }
         });
       }
@@ -128,16 +123,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
-    if (_idImageFile == null || _idImageBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an ID image'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _isLoading = true;
     });
@@ -148,13 +133,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         _profileImageBytes!,
         _profileImageFile!.name,
       );
-      final idImageKey = await UserService().uploadSingleImageFromBytes(
-        _idImageBytes!,
-        _idImageFile!.name,
-      );
 
-      if (profileImageKey == null || idImageKey == null) {
-        throw Exception('Failed to upload images');
+      if (profileImageKey == null) {
+        throw Exception('Failed to upload profile image');
       }
 
       // Create profile
@@ -175,7 +156,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         zip: _zipController.text.trim(),
         gender: _selectedGender,
         profileImage: profileImageKey,
-        idImage: idImageKey,
         certifications: [], // Empty list for students
       );
 
@@ -500,13 +480,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     'Profile Photo *',
                     _profileImageBytes,
                     () => _pickImage('profile'),
-                    screenWidth,
-                  ),
-                  SizedBox(height: screenHeight * 0.02),
-                  _buildImagePicker(
-                    'ID Image *',
-                    _idImageBytes,
-                    () => _pickImage('id'),
                     screenWidth,
                   ),
                 ],

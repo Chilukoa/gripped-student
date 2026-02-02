@@ -165,7 +165,6 @@ class UserProfile {
         state.isNotEmpty &&
         zip.isNotEmpty &&
         gender.isNotEmpty &&
-        profileImage != null &&
-        idImage != null;
+        profileImage != null;
   }
 }

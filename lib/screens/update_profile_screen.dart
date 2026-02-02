@@ -46,9 +46,7 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
   // Image handling - store both XFile and bytes for web compatibility
   XFile? _profileImageFile;
-  XFile? _idImageFile;
   Uint8List? _profileImageBytes;
-  Uint8List? _idImageBytes;
 
   @override
   void initState() {
@@ -59,7 +57,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
   void _populateFields() {
     safePrint('UpdateProfileScreen: Populating fields');
     safePrint('Profile image key: ${widget.currentProfile.profileImage}');
-    safePrint('ID image key: ${widget.currentProfile.idImage}');
     
     _firstNameController.text = widget.currentProfile.firstName;
     _lastNameController.text = widget.currentProfile.lastName;
@@ -102,9 +99,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
           if (type == 'profile') {
             _profileImageFile = pickedFile;
             _profileImageBytes = bytes;
-          } else if (type == 'id') {
-            _idImageFile = pickedFile;
-            _idImageBytes = bytes;
           }
         });
       }
@@ -185,7 +179,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
     try {
       String? profileImageUrl = widget.currentProfile.profileImage;
-      String? idImageUrl = widget.currentProfile.idImage;
 
       // Handle image uploads if new images were selected (using bytes for web compatibility)
       if (_profileImageBytes != null && _profileImageFile != null) {
@@ -199,25 +192,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Failed to upload profile image: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
-      }
-
-      if (_idImageBytes != null && _idImageFile != null) {
-        try {
-          idImageUrl = await UserService().uploadSingleImageFromBytes(
-            _idImageBytes!,
-            _idImageFile!.name,
-          );
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to upload ID image: $e'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -244,7 +218,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
         zip: _zipCodeController.text.trim(),
         gender: _selectedGender,
         profileImage: profileImageUrl,
-        idImage: idImageUrl,
         certifications: widget.currentProfile.certifications,
         createdAt: widget.currentProfile.createdAt,
         updatedAt: DateTime.now(),
@@ -646,156 +619,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                           ),
                         ),
                       ),
-                      SizedBox(height: screenHeight * 0.02),
-
-                      // ID Document Section
-                      Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(screenWidth * 0.04),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'ID Document',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              SizedBox(height: screenHeight * 0.01),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Show current ID document if exists
-                                  if (widget.currentProfile.idImage != null) ...[
-                                    const Text(
-                                      'Current ID Document:',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'ID Key: ${widget.currentProfile.idImage}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    GestureDetector(
-                                      onTap: () => _showFullScreenImage(
-                                        widget.currentProfile.idImage,
-                                        'Current ID Document',
-                                      ),
-                                      child: Container(
-                                        width: screenWidth * 0.2,
-                                        height: screenWidth * 0.2,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.grey),
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: S3Image(
-                                            imageKey: widget.currentProfile.idImage!,
-                                            userId: widget.currentProfile.id!,
-                                            fit: BoxFit.cover,
-                                            loadingWidget: Container(
-                                              color: Colors.grey[300],
-                                              child: const Center(
-                                                child: CircularProgressIndicator(),
-                                              ),
-                                            ),
-                                            errorWidget: Container(
-                                              color: Colors.red[100],
-                                              child: const Center(
-                                                child: Text('Failed to load', style: TextStyle(fontSize: 10)),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    const Text(
-                                      'New ID Document (optional):',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                  ],
-                                  // New image preview
-                                  Container(
-                                    width: screenWidth * 0.2,
-                                    height: screenWidth * 0.2,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      border: Border.all(color: Colors.grey),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: _idImageBytes != null
-                                        ? ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Image.memory(
-                                              _idImageBytes!,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          )
-                                        : const Icon(
-                                            Icons.credit_card,
-                                            size: 40,
-                                            color: Colors.grey,
-                                          ),
-                                  ),
-                                  SizedBox(height: screenHeight * 0.015),
-                                  // Buttons row with flexible layout
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: () => _pickImage('id'),
-                                          icon: const Icon(Icons.photo_library, size: 16),
-                                          label: const Text('Choose Image'),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.deepPurple,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(vertical: 8),
-                                          ),
-                                        ),
-                                      ),
-                                      if (_idImageBytes != null) ...[
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: ElevatedButton.icon(
-                                            onPressed: () {
-                                              setState(() {
-                                                _idImageFile = null;
-                                                _idImageBytes = null;
-                                              });
-                                            },
-                                            icon: const Icon(Icons.clear, size: 16),
-                                            label: const Text('Remove'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.red,
-                                              foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(vertical: 8),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
                       SizedBox(height: screenHeight * 0.02),
 
                       // Bio
