@@ -8,6 +8,7 @@ import '../services/payment_service.dart';
 import 'login_screen.dart';
 import 'update_profile_screen.dart';
 import 'payment_method_screen.dart';
+import 'customer_support_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -615,6 +616,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
     _checkPaymentMethod();
   }
 
+  void _navigateToCustomerSupport() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const CustomerSupportScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final actualWidth = MediaQuery.of(context).size.width;
@@ -654,6 +663,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                 _updateProfile();
               } else if (value == 'paymentmethod') {
                 _navigateToPaymentMethod();
+              } else if (value == 'support') {
+                _navigateToCustomerSupport();
               } else if (value == 'signout') {
                 _signOut();
               }
@@ -681,6 +692,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
                     Text(_hasPaymentMethod 
                         ? 'Update Payment Method' 
                         : 'Add Payment Method'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'support',
+                child: Row(
+                  children: [
+                    Icon(Icons.support_agent, color: Colors.purple),
+                    SizedBox(width: 8),
+                    Text('Customer Support'),
                   ],
                 ),
               ),

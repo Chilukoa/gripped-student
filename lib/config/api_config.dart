@@ -87,6 +87,12 @@ class ApiConfig {
   static String get updateRating => '$baseUrl/ratings'; // + /{trainerId}
   static String get deleteRating => '$baseUrl/ratings'; // + /{trainerId}
 
+  // Customer Support endpoints
+  static String get createSupportTicket => '$baseUrl/support';
+  static String get getSupportTickets => '$baseUrl/support';
+  static String get getSupportTicket => '$baseUrl/support'; // + /{ticketId}
+  static String get updateSupportTicket => '$baseUrl/support'; // + /{ticketId}
+
   // S3 bucket URL for profile images (environment-aware)
   // Use s3BucketUrl getter above instead of this hardcoded value
 
