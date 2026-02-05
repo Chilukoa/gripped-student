@@ -80,6 +80,11 @@ class ApiConfig {
 
   // Search endpoints
   static String get searchClasses => '$baseUrl/classes/search';
+  static String get batchEnrollClasses => '$baseUrl/classes/batch-enroll';
+
+  // Trainer endpoints
+  static String getTrainerProfile(String trainerId) => '$baseUrl/trainers/$trainerId/profile';
+  static String getTrainerClasses(String trainerId) => '$baseUrl/trainers/$trainerId/classes';
 
   // Rating endpoints
   static String get getRatings => '$baseUrl/ratings';

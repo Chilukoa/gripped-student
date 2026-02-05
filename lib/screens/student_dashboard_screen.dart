@@ -9,6 +9,7 @@ import 'login_screen.dart';
 import 'update_profile_screen.dart';
 import 'payment_method_screen.dart';
 import 'customer_support_screen.dart';
+import 'trainer_details_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -2056,54 +2057,78 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen>
   }
 
   void _showClassDetails(Map<String, dynamic> classResult) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(classResult['classTitle'] ?? 'Class Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (classResult['trainerName'] != null) ...[
-                Text('Trainer: ${classResult['trainerName']}', 
-                     style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+    final trainerId = classResult['trainerId'] as String?;
+    final trainerName = classResult['trainerName'] as String? ?? 'Trainer';
+
+    if (trainerId == null || trainerId.isEmpty) {
+      // Fallback to simple dialog if no trainer ID
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(classResult['classTitle'] ?? 'Class Details'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (classResult['trainerName'] != null) ...[
+                  Text('Trainer: ${classResult['trainerName']}', 
+                       style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                ],
+                if (classResult['description'] != null) ...[
+                  Text('Description: ${classResult['description']}'),
+                  const SizedBox(height: 8),
+                ],
+                if (classResult['startDateTime'] != null) ...[
+                  Text('Time: ${_formatApiDateTime(classResult['startDateTime'], classResult['endDateTime'])}'),
+                  const SizedBox(height: 8),
+                ],
+                if (classResult['address'] != null) ...[
+                  Text('Location: ${classResult['address']}'),
+                  const SizedBox(height: 8),
+                ],
+                if (classResult['studentCost'] != null || classResult['price'] != null) ...[
+                  Text('Price: \$${(classResult['studentCost'] as num? ?? (classResult['price'] as num? ?? 0) * 1.13).toStringAsFixed(2)}'),
+                  const SizedBox(height: 8),
+                ],
+                if (classResult['maxStudents'] != null) ...[
+                  Text('Capacity: ${classResult['currentStudents'] ?? 0}/${classResult['maxStudents']} enrolled'),
+                  const SizedBox(height: 8),
+                ],
+                if (classResult['distanceMiles'] != null) ...[
+                  Text('Distance: ${classResult['distanceMiles']} miles away'),
+                ],
               ],
-              if (classResult['description'] != null) ...[
-                Text('Description: ${classResult['description']}'),
-                const SizedBox(height: 8),
-              ],
-              if (classResult['startDateTime'] != null) ...[
-                Text('Time: ${_formatApiDateTime(classResult['startDateTime'], classResult['endDateTime'])}'),
-                const SizedBox(height: 8),
-              ],
-              if (classResult['address'] != null) ...[
-                Text('Location: ${classResult['address']}'),
-                const SizedBox(height: 8),
-              ],
-              if (classResult['studentCost'] != null || classResult['price'] != null) ...[
-                Text('Price: \$${(classResult['studentCost'] as num? ?? (classResult['price'] as num? ?? 0) * 1.13).toStringAsFixed(2)}'),
-                const SizedBox(height: 8),
-              ],
-              if (classResult['maxStudents'] != null) ...[
-                Text('Capacity: ${classResult['currentStudents'] ?? 0}/${classResult['maxStudents']} enrolled'),
-                const SizedBox(height: 8),
-              ],
-              if (classResult['distanceMiles'] != null) ...[
-                Text('Distance: ${classResult['distanceMiles']} miles away'),
-              ],
-            ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
+      );
+      return;
+    }
+
+    // Navigate to full trainer details screen
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => TrainerDetailsScreen(
+          trainerId: trainerId,
+          trainerName: trainerName,
+          initialTrainerData: {
+            'email': classResult['trainerEmail'],
+            'phone': classResult['trainerPhone'],
+          },
+        ),
       ),
-    );
+    ).then((_) {
+      // Refresh enrolled classes when returning
+      _loadEnrolledClasses();
+    });
   }
 
   Future<void> _showBookingConfirmation(Map<String, dynamic> classResult) async {

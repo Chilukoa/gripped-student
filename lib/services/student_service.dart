@@ -182,6 +182,93 @@ class StudentService {
     }
   }
 
+  /// Get trainer's public profile
+  Future<Map<String, dynamic>> getTrainerProfile(String trainerId) async {
+    try {
+      final token = await _getAuthToken();
+      
+      safePrint('StudentService: Getting trainer profile for: $trainerId');
+      
+      final response = await http.get(
+        Uri.parse(config.ApiConfig.getTrainerProfile(trainerId)),
+        headers: _getAuthHeaders(token),
+      );
+
+      safePrint('StudentService: Trainer profile response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to get trainer profile: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      safePrint('StudentService: Error getting trainer profile: $e');
+      throw Exception('Failed to get trainer profile: $e');
+    }
+  }
+
+  /// Get trainer's upcoming classes
+  Future<Map<String, dynamic>> getTrainerUpcomingClasses(String trainerId, {int daysAhead = 90}) async {
+    try {
+      final token = await _getAuthToken();
+      
+      safePrint('StudentService: Getting trainer classes for: $trainerId, daysAhead: $daysAhead');
+      
+      final uri = Uri.parse(config.ApiConfig.getTrainerClasses(trainerId)).replace(
+        queryParameters: {'daysAhead': daysAhead.toString()},
+      );
+      
+      final response = await http.get(
+        uri,
+        headers: _getAuthHeaders(token),
+      );
+
+      safePrint('StudentService: Trainer classes response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to get trainer classes: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      safePrint('StudentService: Error getting trainer classes: $e');
+      throw Exception('Failed to get trainer classes: $e');
+    }
+  }
+
+  /// Enroll in multiple classes at once
+  Future<Map<String, dynamic>> batchEnrollInClasses(List<String> sessionIds) async {
+    try {
+      final token = await _getAuthToken();
+      
+      safePrint('StudentService: Batch enrolling in ${sessionIds.length} classes');
+      
+      final requestBody = {
+        'sessionIds': sessionIds,
+      };
+      
+      final response = await http.post(
+        Uri.parse(config.ApiConfig.batchEnrollClasses),
+        headers: _getAuthHeaders(token),
+        body: json.encode(requestBody),
+      );
+
+      safePrint('StudentService: Batch enroll response status: ${response.statusCode}');
+      safePrint('StudentService: Batch enroll response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        // Parse the error response to get details
+        final errorData = json.decode(response.body) as Map<String, dynamic>;
+        throw Exception('Failed to batch enroll: ${errorData['error'] ?? response.body}');
+      }
+    } catch (e) {
+      safePrint('StudentService: Error batch enrolling: $e');
+      throw Exception('Failed to batch enroll: $e');
+    }
+  }
+
   /// Submit a rating for a trainer
   Future<Map<String, dynamic>> submitRating({
     required String trainerId,
