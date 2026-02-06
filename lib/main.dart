@@ -6,6 +6,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import '../screens/login_screen.dart';
 import '../screens/profile_setup_screen.dart';
 import '../screens/student_dashboard_screen.dart';
+import '../screens/trainer_details_screen.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models/user_profile.dart' as models;
@@ -15,6 +16,12 @@ import '../widgets/web_wrapper.dart';
 // App configuration - defines what role this app is designed for
 const String EXPECTED_USER_ROLE =
     'subscriber'; // This app is designed for subscribers only
+
+// Global key for navigation from anywhere
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// Store pending deep link trainer ID
+String? _pendingTrainerId;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,10 +79,51 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Gripped Student',
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
+      // Handle deep links via onGenerateRoute
+      onGenerateRoute: (settings) {
+        safePrint('Route requested: ${settings.name}');
+        
+        // Parse the route to check for trainer deep link
+        final uri = Uri.parse(settings.name ?? '/');
+        
+        // Check for /trainer/{trainerId} pattern
+        if (uri.pathSegments.length >= 2 && uri.pathSegments[0] == 'trainer') {
+          final trainerId = uri.pathSegments[1];
+          safePrint('Deep link detected - trainer ID: $trainerId');
+          
+          // Store the pending trainer ID for after login
+          _pendingTrainerId = trainerId;
+          
+          // Return the auth wrapper which will handle login flow
+          return MaterialPageRoute(
+            builder: (context) => WebWrapper(
+              child: _error != null
+                  ? ErrorScreen(error: _error!)
+                  : _isAmplifyConfigured
+                  ? AuthWrapper(pendingTrainerId: trainerId)
+                  : const SplashScreen(),
+            ),
+            settings: settings,
+          );
+        }
+        
+        // Default route
+        return MaterialPageRoute(
+          builder: (context) => WebWrapper(
+            child: _error != null
+                ? ErrorScreen(error: _error!)
+                : _isAmplifyConfigured
+                ? const AuthWrapper()
+                : const SplashScreen(),
+          ),
+          settings: settings,
+        );
+      },
       home: WebWrapper(
         child: _error != null
             ? ErrorScreen(error: _error!)
@@ -89,7 +137,9 @@ class _MyAppState extends State<MyApp> {
 }
 
 class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
+  final String? pendingTrainerId;
+  
+  const AuthWrapper({super.key, this.pendingTrainerId});
 
   @override
   State<AuthWrapper> createState() => _AuthWrapperState();
@@ -105,6 +155,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   void initState() {
     super.initState();
+    // Store pending trainer ID in global variable if passed
+    if (widget.pendingTrainerId != null) {
+      _pendingTrainerId = widget.pendingTrainerId;
+    }
     _checkAuthStatus();
   }
 
@@ -194,7 +248,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     safePrint(
-      'BUILD METHOD - _isLoading: $_isLoading, _isSignedIn: $_isSignedIn, _hasProfile: $_hasProfile, _roleError: $_roleError',
+      'BUILD METHOD - _isLoading: $_isLoading, _isSignedIn: $_isSignedIn, _hasProfile: $_hasProfile, _roleError: $_roleError, _pendingTrainerId: $_pendingTrainerId',
     );
     
     if (_isLoading) {
@@ -208,11 +262,27 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
 
     if (!_isSignedIn) {
-      return const LoginScreen();
+      // Pass pending trainer ID to login screen for redirect after login
+      return LoginScreen(pendingTrainerId: _pendingTrainerId);
     }
 
     if (!_hasProfile) {
       return const ProfileSetupScreen();
+    }
+
+    // Check if there's a pending trainer deep link
+    if (_pendingTrainerId != null) {
+      final trainerId = _pendingTrainerId!;
+      // Clear the pending trainer ID
+      _pendingTrainerId = null;
+      
+      safePrint('Navigating to TrainerDetailsScreen for trainer: $trainerId');
+      
+      // Navigate to trainer details screen
+      return TrainerDetailsScreen(
+        trainerId: trainerId,
+        trainerName: 'Trainer', // Will be loaded from API
+      );
     }
 
     // Navigate to appropriate dashboard - should only be subscriber at this point

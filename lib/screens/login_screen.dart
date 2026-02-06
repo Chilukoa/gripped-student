@@ -5,7 +5,9 @@ import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? pendingTrainerId;
+  
+  const LoginScreen({super.key, this.pendingTrainerId});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -46,8 +48,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (result.isSignedIn) {
         if (mounted) {
-          // Navigate back to main app to re-check auth status and profile
-          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          // Check if there's a pending trainer to navigate to
+          if (widget.pendingTrainerId != null) {
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              '/trainer/${widget.pendingTrainerId}',
+              (route) => false,
+            );
+          } else {
+            // Navigate back to main app to re-check auth status and profile
+            Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          }
         }
       }
     } on AuthException catch (e) {
@@ -94,6 +104,31 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                // Show banner if coming from trainer share link
+                if (widget.pendingTrainerId != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.deepPurple.shade200),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.deepPurple),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Sign in to view trainer profile',
+                            style: TextStyle(color: Colors.deepPurple),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 const SizedBox(height: 60),
                 // Logo or App Name
                 const Icon(
